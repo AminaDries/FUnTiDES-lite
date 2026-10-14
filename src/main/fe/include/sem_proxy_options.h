@@ -27,6 +27,11 @@ class SemProxyOptions
   bool isModelOnNodes = false;
   bool isElastic = false;
 
+  // snapshots
+  bool snapshots = false;                 // faut-il sauvegarder ?
+  int snap_interval = 20;                 // une photo tous les N pas de temps
+  std::string snap_folder = "snapshots";  // dossier de sortie
+
   void validate() const
   {
     if (order < 1) throw std::runtime_error("order must be >= 1");
@@ -34,6 +39,8 @@ class SemProxyOptions
       throw std::runtime_error("ex/ey/ez must be > 0");
     if (lx <= 0 || ly <= 0 || lz <= 0)
       throw std::runtime_error("lx/ly/lz must be > 0");
+    if (snap_interval <= 0)
+      throw std::runtime_error("snap-interval must be > 0");
   }
 
   // Bind CLI flags to this instance (no --help here)
@@ -71,6 +78,13 @@ class SemProxyOptions
         "Boolean to tell if the model is charged on nodes (true) or on element "
         "(false)",
         cxxopts::value<bool>(o.isModelOnNodes))(
-        "is-elastic", "Elastic simulation", cxxopts::value<bool>(o.isElastic));
+       // "is-elastic", "Elastic simulation", cxxopts::value<bool>(o.isElastic));
+        "is-elastic", "Elastic simulation", cxxopts::value<bool>(o.isElastic))(
+        "snapshots", "Save snapshots of the wave field (CSV)",
+        cxxopts::value<bool>(o.snapshots))(
+        "snap-interval", "Number of time steps between two snapshots",
+        cxxopts::value<int>(o.snap_interval))(
+        "snap-folder", "Folder where snapshots are written",
+        cxxopts::value<std::string>(o.snap_folder));
   }
 };

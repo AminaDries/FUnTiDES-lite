@@ -1,0 +1,1 @@
+/usr/bin/c++ -fPIC -O3 -DNDEBUG -march=native -mtune=native -shared -Wl,--dependency-file=CMakeFiles/kokkossimd.dir/link.d -Wl,-soname,libkokkossimd.so.4.1 -o libkokkossimd.so.4.1.00 CMakeFiles/kokkossimd.dir/Kokkos_SIMD_dummy.cpp.o

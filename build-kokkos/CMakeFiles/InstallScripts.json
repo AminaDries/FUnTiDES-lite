@@ -1,0 +1,38 @@
+{
+	"InstallScripts" : 
+	[
+		"/home/ab/CISD/Projet_insitu/Version_2/FUnTiDES-lite/build-kokkos/cmake_install.cmake",
+		"/home/ab/CISD/Projet_insitu/Version_2/FUnTiDES-lite/build-kokkos/external/kokkos/cmake_install.cmake",
+		"/home/ab/CISD/Projet_insitu/Version_2/FUnTiDES-lite/build-kokkos/external/kokkos/core/cmake_install.cmake",
+		"/home/ab/CISD/Projet_insitu/Version_2/FUnTiDES-lite/build-kokkos/external/kokkos/core/src/cmake_install.cmake",
+		"/home/ab/CISD/Projet_insitu/Version_2/FUnTiDES-lite/build-kokkos/external/kokkos/containers/cmake_install.cmake",
+		"/home/ab/CISD/Projet_insitu/Version_2/FUnTiDES-lite/build-kokkos/external/kokkos/containers/src/cmake_install.cmake",
+		"/home/ab/CISD/Projet_insitu/Version_2/FUnTiDES-lite/build-kokkos/external/kokkos/algorithms/cmake_install.cmake",
+		"/home/ab/CISD/Projet_insitu/Version_2/FUnTiDES-lite/build-kokkos/external/kokkos/algorithms/src/cmake_install.cmake",
+		"/home/ab/CISD/Projet_insitu/Version_2/FUnTiDES-lite/build-kokkos/external/kokkos/simd/cmake_install.cmake",
+		"/home/ab/CISD/Projet_insitu/Version_2/FUnTiDES-lite/build-kokkos/external/kokkos/simd/src/cmake_install.cmake",
+		"/home/ab/CISD/Projet_insitu/Version_2/FUnTiDES-lite/build-kokkos/external/kokkos/example/cmake_install.cmake",
+		"/home/ab/CISD/Projet_insitu/Version_2/FUnTiDES-lite/build-kokkos/src/cmake_install.cmake",
+		"/home/ab/CISD/Projet_insitu/Version_2/FUnTiDES-lite/build-kokkos/src/utils/cmake_install.cmake",
+		"/home/ab/CISD/Projet_insitu/Version_2/FUnTiDES-lite/build-kokkos/src/discretization/cmake_install.cmake",
+		"/home/ab/CISD/Projet_insitu/Version_2/FUnTiDES-lite/build-kokkos/src/discretization/fe/SEMKernels/cmake_install.cmake",
+		"/home/ab/CISD/Projet_insitu/Version_2/FUnTiDES-lite/build-kokkos/src/discretization/fe/SEMKernels/src/cmake_install.cmake",
+		"/home/ab/CISD/Projet_insitu/Version_2/FUnTiDES-lite/build-kokkos/src/discretization/fe/SEMKernels/src/finiteElement/cmake_install.cmake",
+		"/home/ab/CISD/Projet_insitu/Version_2/FUnTiDES-lite/build-kokkos/src/model/cmake_install.cmake",
+		"/home/ab/CISD/Projet_insitu/Version_2/FUnTiDES-lite/build-kokkos/src/model/api/cmake_install.cmake",
+		"/home/ab/CISD/Projet_insitu/Version_2/FUnTiDES-lite/build-kokkos/src/model/impl/cmake_install.cmake",
+		"/home/ab/CISD/Projet_insitu/Version_2/FUnTiDES-lite/build-kokkos/src/model/impl/builder/cmake_install.cmake",
+		"/home/ab/CISD/Projet_insitu/Version_2/FUnTiDES-lite/build-kokkos/src/model/impl/builder/cartesian/cmake_install.cmake",
+		"/home/ab/CISD/Projet_insitu/Version_2/FUnTiDES-lite/build-kokkos/src/model/impl/model/cmake_install.cmake",
+		"/home/ab/CISD/Projet_insitu/Version_2/FUnTiDES-lite/build-kokkos/src/model/impl/model/struct/cmake_install.cmake",
+		"/home/ab/CISD/Projet_insitu/Version_2/FUnTiDES-lite/build-kokkos/src/model/impl/model/unstruct/cmake_install.cmake",
+		"/home/ab/CISD/Projet_insitu/Version_2/FUnTiDES-lite/build-kokkos/src/solver/cmake_install.cmake",
+		"/home/ab/CISD/Projet_insitu/Version_2/FUnTiDES-lite/build-kokkos/src/solver/api/cmake_install.cmake",
+		"/home/ab/CISD/Projet_insitu/Version_2/FUnTiDES-lite/build-kokkos/src/solver/impl/cmake_install.cmake",
+		"/home/ab/CISD/Projet_insitu/Version_2/FUnTiDES-lite/build-kokkos/src/solver/impl/src/makutu/cmake_install.cmake",
+		"/home/ab/CISD/Projet_insitu/Version_2/FUnTiDES-lite/build-kokkos/src/main/cmake_install.cmake",
+		"/home/ab/CISD/Projet_insitu/Version_2/FUnTiDES-lite/build-kokkos/src/main/fd/cmake_install.cmake",
+		"/home/ab/CISD/Projet_insitu/Version_2/FUnTiDES-lite/build-kokkos/src/main/fe/cmake_install.cmake"
+	],
+	"Parallel" : false
+}
