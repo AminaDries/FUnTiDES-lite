@@ -274,3 +274,4 @@ receiver.dat
 
 *.err
 benchmark_comparison.png
+output_fake/
