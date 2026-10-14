@@ -1,1 +1,0 @@
-/usr/bin/c++ -fPIC -O3 -DNDEBUG -march=native -mtune=native -shared -Wl,--dependency-file=CMakeFiles/impl_git_version.dir/link.d -Wl,-soname,libimpl_git_version.so -o libimpl_git_version.so CMakeFiles/impl_git_version.dir/__/__/generated/Kokkos_Version_Info.cpp.o

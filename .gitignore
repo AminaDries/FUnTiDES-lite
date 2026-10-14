@@ -273,4 +273,8 @@ snap*.png
 receiver.dat
 
 *.err
-benchmark_comparison.pngsnapshots*/
+benchmark_comparison.png
+snapshots*/
+build-kokkos/
+
+
