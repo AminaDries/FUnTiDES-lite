@@ -27,6 +27,9 @@ class SemProxyOptions
   bool isModelOnNodes = false;
   bool isElastic = false;
 
+  std::string receivers_file = "";
+  std::string seismo_dir = "seismos";
+
   void validate() const
   {
     if (order < 1) throw std::runtime_error("order must be >= 1");
@@ -71,6 +74,10 @@ class SemProxyOptions
         "Boolean to tell if the model is charged on nodes (true) or on element "
         "(false)",
         cxxopts::value<bool>(o.isModelOnNodes))(
-        "is-elastic", "Elastic simulation", cxxopts::value<bool>(o.isElastic));
+        "is-elastic", "Elastic simulation", cxxopts::value<bool>(o.isElastic))(
+        "receivers-file", "CSV file of receivers (x,y,z per line)",
+        cxxopts::value<std::string>(o.receivers_file))(
+        "seismo-dir", "Output directory for seismograms",
+        cxxopts::value<std::string>(o.seismo_dir));
   }
 };

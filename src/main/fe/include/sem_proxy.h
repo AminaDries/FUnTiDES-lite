@@ -14,9 +14,11 @@
 #include <solver_factory.h>
 #include <utils.h>
 
+#include <array>
 #include <memory>
 #include <string>
 #include <variant>
+#include <vector>
 
 #include "sem_proxy_options.h"
 
@@ -85,8 +87,10 @@ class SEMproxy
   int nb_elements_[3] = {0};
   int nb_nodes_[3] = {0};
   std::array<float, 3> src_coord_ = {0};
-  std::array<float, 3> rcv_coord_ = {0};
   float domain_size_[3] = {0};
+  std::vector<std::array<float, 3>> rcv_coords_;
+  int nb_receivers_ = 1;
+  std::string seismo_dir_;
 
   // snapshots
   bool is_snapshots_;
@@ -121,6 +125,10 @@ class SEMproxy
 
   // initialize source and RHS
   void init_source();
+
+  void readReceivers(const std::string& filename, const SemProxyOptions& opt);
+
+  void saveSeismos();
 
   // allocate arrays and vectors
   void init_arrays();
