@@ -76,8 +76,8 @@ class SEMproxy
    */
   float find_cfl_dt(float cfl_factor);
 
-  void saveSnapshot(int timestep);
-
+  //void saveSnapshot(int timestep);
+  void saveSnapshot(int timestep, const arrayReal& field);
  private:
   int i1 = 0;
   int i2 = 1;

@@ -21,6 +21,9 @@
 #include <sstream>
 #include <variant>
 
+#include <filesystem>
+#include <fstream>
+
 using namespace SourceAndReceiverUtils;
 
 SEMproxy::SEMproxy(const SemProxyOptions& opt)
@@ -49,6 +52,13 @@ SEMproxy::SEMproxy(const SemProxyOptions& opt)
   readReceivers(opt.receivers_file, opt);
 
   bool isModelOnNodes = opt.isModelOnNodes;
+
+  // snapshots
+  is_snapshots_ = opt.snapshots;
+  snap_time_interval_ = opt.snap_interval;
+  snap_folder_ = opt.snap_folder;
+  if (is_snapshots_) std::filesystem::create_directories(snap_folder_);
+
   isElastic_ = opt.isElastic;
   cout << boolalpha;
   bool isElastic = isElastic_;
@@ -183,6 +193,12 @@ void SEMproxy::run()
       pnAtReceiver(r, indexTimeSample) = val;
     }
 
+    // Snapshot du champ d'onde (avant le swap : i1 contient le champ qui vient d'etre calcule)
+    if (is_snapshots_ && indexTimeSample % snap_time_interval_ == 0)
+    {
+      saveSnapshot(indexTimeSample, solverData.m_pnGlobal);
+    }
+
     swap(i1, i2);
 
     auto tmp = solverData.m_i1;
@@ -210,6 +226,25 @@ void SEMproxy::run()
   cout << "---- Elapsed Output Time : " << outputtime_ms / 1E6 << " seconds."
        << endl;
   cout << "------------------------------------------------ " << endl;
+}
+
+// Écrit un snapshot : un fichier CSV avec la pression de tous les noeuds
+void SEMproxy::saveSnapshot(int timestep, const arrayReal& field)
+{
+  std::ostringstream name;
+  name << snap_folder_ << "/snapshot_" << std::setw(6) << std::setfill('0')
+       << timestep << ".csv";
+
+  std::ofstream file(name.str());
+  if (!file) throw std::runtime_error("Cannot open " + name.str());
+
+  file << "x,y,z,pressure\n";
+  const int nbNodes = m_mesh->getNumberOfNodes();
+  for (int n = 0; n < nbNodes; n++)
+  {
+    file << m_mesh->nodeCoord(n, 0) << ',' << m_mesh->nodeCoord(n, 1) << ','
+         << m_mesh->nodeCoord(n, 2) << ',' << field(n, i1) << '\n';
+  }
 }
 
 // Initialize arrays
