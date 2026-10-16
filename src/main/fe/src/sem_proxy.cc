@@ -178,7 +178,7 @@ void SEMproxy::run()
           {
             int nodeIdx = m_mesh->globalNodeIndex(rhsElementRcv[r], i, j, k);
             int local = i + j * npe + k * npe * npe;
-            val += pnGlobal(nodeIdx, i2) * rhsWeightsRcv(r, local);
+            val += solverData.m_pnGlobal(nodeIdx, i1) * rhsWeightsRcv(r, local);
           }
       pnAtReceiver(r, indexTimeSample) = val;
     }
