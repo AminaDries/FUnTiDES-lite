@@ -228,10 +228,15 @@ void SEMproxy::run()
     totalOutputTime += system_clock::now() - startOutputTime;
   }
 
-  auto startSeismo = system_clock::now();
+  const auto startSeismo = std::chrono::steady_clock::now();
   saveSeismos();
-  std::chrono::duration<double> seismoTime = system_clock::now() - startSeismo;
-  std::cout << "---- Seismo write time   : " << seismoTime.count()
+  const double seismoWriteTime =
+      std::chrono::duration<double>(std::chrono::steady_clock::now() -
+                                    startSeismo)
+          .count();
+  const std::size_t seismoBytes =
+      std::filesystem::file_size(seismo_dir_ + "/seismos.csv");
+  std::cout << "---- Seismo write time   : " << seismoWriteTime
             << " seconds." << std::endl;
 
   float kerneltime_ms = time_point_cast<microseconds>(totalComputeTime)
@@ -249,7 +254,8 @@ void SEMproxy::run()
   writeMetrics(
       std::chrono::duration<double>(totalComputeTime.time_since_epoch())
           .count(),
-      snapshotWriteTime, snapshotCount, snapshotBytes);
+      snapshotWriteTime, snapshotCount, snapshotBytes, seismoWriteTime,
+      seismoBytes);
 }
 
 // Écrit un snapshot : un fichier CSV avec la pression de tous les noeuds
@@ -274,7 +280,9 @@ std::size_t SEMproxy::saveSnapshot(int timestep, const arrayReal& field)
 
 // Ajoute une ligne dans le fichier de métriques (crée l'en-tête si besoin)
 void SEMproxy::writeMetrics(double computeTime, double snapshotWriteTime,
-                            int snapshotCount, std::size_t snapshotBytes) const
+                            int snapshotCount, std::size_t snapshotBytes,
+                            double seismoWriteTime,
+                            std::size_t seismoBytes) const
 {
   if (opt_.metrics_file.empty()) return;
 
@@ -296,7 +304,8 @@ void SEMproxy::writeMetrics(double computeTime, double snapshotWriteTime,
   {
     file << "ex,ey,ez,order,nb_nodes,nb_elements,dt,timemax,nb_steps,threads,"
             "snapshots,snap_interval,compute_time_s,snapshot_write_time_s,"
-            "snapshot_count,snapshot_bytes,max_rss_kb\n";
+            "snapshot_count,snapshot_bytes,max_rss_kb,nb_receivers,"
+            "seismo_write_time_s,seismo_bytes\n";
   }
   file << std::setprecision(9) << opt_.ex << ',' << opt_.ey << ',' << opt_.ez
        << ',' << opt_.order << ',' << m_mesh->getNumberOfNodes() << ','
@@ -304,7 +313,8 @@ void SEMproxy::writeMetrics(double computeTime, double snapshotWriteTime,
        << num_sample_ << ',' << threads << ',' << (is_snapshots_ ? 1 : 0)
        << ',' << snap_time_interval_ << ',' << computeTime << ','
        << snapshotWriteTime << ',' << snapshotCount << ',' << snapshotBytes
-       << ',' << usage.ru_maxrss << '\n';
+       << ',' << usage.ru_maxrss << ',' << nb_receivers_ << ','
+       << seismoWriteTime << ',' << seismoBytes << '\n';
 }
 
 // Initialize arrays

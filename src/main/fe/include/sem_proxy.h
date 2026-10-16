@@ -84,7 +84,8 @@ class SEMproxy
   std::size_t saveSnapshot(int timestep, const arrayReal& field);  
 
   void writeMetrics(double computeTime, double snapshotWriteTime,
-                    int snapshotCount, std::size_t snapshotBytes) const;
+                    int snapshotCount, std::size_t snapshotBytes,
+                    double seismoWriteTime, std::size_t seismoBytes) const;
  private:
   int i1 = 0;
   int i2 = 1;
