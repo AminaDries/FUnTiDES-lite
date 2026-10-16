@@ -20,6 +20,8 @@
 #include <variant>
 #include <vector>
 
+#include <cstddef>
+
 #include "sem_proxy_options.h"
 
 /**
@@ -76,8 +78,13 @@ class SEMproxy
    */
   float find_cfl_dt(float cfl_factor);
 
-  //void saveSnapshot(int timestep);
-  void saveSnapshot(int timestep, const arrayReal& field);
+  //void saveSnapshot(int timestep)
+  // :: void saveSnapshot(int timestep, const arrayReal& field);
+  
+  std::size_t saveSnapshot(int timestep, const arrayReal& field);  
+
+  void writeMetrics(double computeTime, double snapshotWriteTime,
+                    int snapshotCount, std::size_t snapshotBytes) const;
  private:
   int i1 = 0;
   int i2 = 1;
@@ -92,6 +99,8 @@ class SEMproxy
   int nb_receivers_ = 1;
   std::string seismo_dir_;
 
+  SemProxyOptions opt_;
+  
   // snapshots
   bool is_snapshots_;
   int snap_time_interval_;

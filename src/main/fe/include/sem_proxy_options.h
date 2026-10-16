@@ -35,6 +35,8 @@ class SemProxyOptions
   int snap_interval = 20;                 // une photo tous les N pas de temps
   std::string snap_folder = "snapshots";  // dossier de sortie
 
+  // Fichier des metrics
+  std::string metrics_file = "";
   void validate() const
   {
     if (order < 1) throw std::runtime_error("order must be >= 1");
@@ -91,6 +93,9 @@ class SemProxyOptions
         "snap-interval", "Number of time steps between two snapshots",
         cxxopts::value<int>(o.snap_interval))(
         "snap-folder", "Folder where snapshots are written",
-        cxxopts::value<std::string>(o.snap_folder));
-  }
+        // cxxopts::value<std::string>(o.snap_folder));
+        cxxopts::value<std::string>(o.snap_folder))(
+        "metrics-file", "CSV file where run metrics are appended",
+        cxxopts::value<std::string>(o.metrics_file));
+      }
 };

@@ -24,6 +24,8 @@
 #include <filesystem>
 #include <fstream>
 
+#include <sys/resource.h>
+
 using namespace SourceAndReceiverUtils;
 
 SEMproxy::SEMproxy(const SemProxyOptions& opt)
@@ -52,6 +54,7 @@ SEMproxy::SEMproxy(const SemProxyOptions& opt)
   readReceivers(opt.receivers_file, opt);
 
   bool isModelOnNodes = opt.isModelOnNodes;
+  opt_ = opt;
 
   // snapshots
   is_snapshots_ = opt.snapshots;
@@ -156,6 +159,9 @@ void SEMproxy::run()
 {
   time_point<system_clock> startComputeTime, startOutputTime, totalComputeTime,
       totalOutputTime;
+  double snapshotWriteTime = 0.0;  // secondes passées à écrire les snapshots
+  int snapshotCount = 0;           // nombre de snapshots écrits
+  std::size_t snapshotBytes = 0;   // octets écrits au total
 
   SEMsolverDataAcoustic solverData(i1, i2, myRHSTerm, pnGlobal, rhsElement,
                                    rhsWeights);
@@ -194,10 +200,24 @@ void SEMproxy::run()
     }
 
     // Snapshot du champ d'onde (avant le swap : i1 contient le champ qui vient d'etre calcule)
-    if (is_snapshots_ && indexTimeSample % snap_time_interval_ == 0)
-    {
-      saveSnapshot(indexTimeSample, solverData.m_pnGlobal);
-    }
+   // if (is_snapshots_ && indexTimeSample % snap_time_interval_ == 0)
+    //{
+      //saveSnapshot(indexTimeSample, solverData.m_pnGlobal);
+    //}
+    // Snapshot du champ d'onde
+  if (is_snapshots_ && indexTimeSample % snap_time_interval_ == 0)
+  {
+      auto startSnap = std::chrono::steady_clock::now();
+
+      snapshotBytes += saveSnapshot(
+          indexTimeSample, solverData.m_pnGlobal);
+
+      snapshotWriteTime += std::chrono::duration<double>(
+          std::chrono::steady_clock::now() - startSnap
+      ).count();
+
+      snapshotCount++;
+  }
 
     swap(i1, i2);
 
@@ -226,10 +246,14 @@ void SEMproxy::run()
   cout << "---- Elapsed Output Time : " << outputtime_ms / 1E6 << " seconds."
        << endl;
   cout << "------------------------------------------------ " << endl;
+  writeMetrics(
+      std::chrono::duration<double>(totalComputeTime.time_since_epoch())
+          .count(),
+      snapshotWriteTime, snapshotCount, snapshotBytes);
 }
 
 // Écrit un snapshot : un fichier CSV avec la pression de tous les noeuds
-void SEMproxy::saveSnapshot(int timestep, const arrayReal& field)
+std::size_t SEMproxy::saveSnapshot(int timestep, const arrayReal& field)
 {
   std::ostringstream name;
   name << snap_folder_ << "/snapshot_" << std::setw(6) << std::setfill('0')
@@ -245,6 +269,42 @@ void SEMproxy::saveSnapshot(int timestep, const arrayReal& field)
     file << m_mesh->nodeCoord(n, 0) << ',' << m_mesh->nodeCoord(n, 1) << ','
          << m_mesh->nodeCoord(n, 2) << ',' << field(n, i1) << '\n';
   }
+  return static_cast<std::size_t>(file.tellp());  // octets écrits
+}
+
+// Ajoute une ligne dans le fichier de métriques (crée l'en-tête si besoin)
+void SEMproxy::writeMetrics(double computeTime, double snapshotWriteTime,
+                            int snapshotCount, std::size_t snapshotBytes) const
+{
+  if (opt_.metrics_file.empty()) return;
+
+  // RAM maximale utilisée par le processus (en Ko sous Linux)
+  struct rusage usage;
+  getrusage(RUSAGE_SELF, &usage);
+
+  int threads = 1;
+#ifdef USE_KOKKOS
+  threads = Kokkos::DefaultExecutionSpace().concurrency();
+#endif
+
+  const bool newFile = !std::filesystem::exists(opt_.metrics_file) ||
+                       std::filesystem::file_size(opt_.metrics_file) == 0;
+  std::ofstream file(opt_.metrics_file, std::ios::app);
+  if (!file) throw std::runtime_error("Cannot open " + opt_.metrics_file);
+
+  if (newFile)
+  {
+    file << "ex,ey,ez,order,nb_nodes,nb_elements,dt,timemax,nb_steps,threads,"
+            "snapshots,snap_interval,compute_time_s,snapshot_write_time_s,"
+            "snapshot_count,snapshot_bytes,max_rss_kb\n";
+  }
+  file << std::setprecision(9) << opt_.ex << ',' << opt_.ey << ',' << opt_.ez
+       << ',' << opt_.order << ',' << m_mesh->getNumberOfNodes() << ','
+       << m_mesh->getNumberOfElements() << ',' << dt_ << ',' << timemax_ << ','
+       << num_sample_ << ',' << threads << ',' << (is_snapshots_ ? 1 : 0)
+       << ',' << snap_time_interval_ << ',' << computeTime << ','
+       << snapshotWriteTime << ',' << snapshotCount << ',' << snapshotBytes
+       << ',' << usage.ru_maxrss << '\n';
 }
 
 // Initialize arrays
