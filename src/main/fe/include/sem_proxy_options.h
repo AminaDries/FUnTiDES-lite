@@ -35,6 +35,12 @@ class SemProxyOptions
   int snap_interval = 20;                 // une photo tous les N pas de temps
   std::string snap_folder = "snapshots";  // dossier de sortie
 
+  // slices
+  bool slices = false;                    // faut-il sauvegarder des slices?
+  std::string slice_axis = "z";                  // dans quelle diretion on coupe
+  float slice_pos = 1000.f;               // à quelle hauteur on coupe (en mètres)
+  std::string slice_folder = "slices";    // dossier où on range les fichiers
+  
   // Fichier des metrics
   std::string metrics_file = "";
   void validate() const
@@ -46,6 +52,8 @@ class SemProxyOptions
       throw std::runtime_error("lx/ly/lz must be > 0");
     if (snap_interval <= 0)
       throw std::runtime_error("snap-interval must be > 0");
+    if (slice_axis != "x" && slice_axis != "y" && slice_axis != "z")
+      throw std::runtime_error("slice-axis must be x, y or z");
   }
 
   // Bind CLI flags to this instance (no --help here)
@@ -95,6 +103,14 @@ class SemProxyOptions
         "snap-folder", "Folder where snapshots are written",
         // cxxopts::value<std::string>(o.snap_folder));
         cxxopts::value<std::string>(o.snap_folder))(
+        "slices", "Save a 2D slice of the wave field (CSV)",
+        cxxopts::value<bool>(o.slices))(
+        "slice-axis", "Axis perpendicular to the slice: x|y|z",
+        cxxopts::value<std::string>(o.slice_axis))(
+        "slice-pos", "Position of the slice plane (meters)",
+        cxxopts::value<float>(o.slice_pos))(
+        "slice-folder", "Folder where slices are written",
+        cxxopts::value<std::string>(o.slice_folder))(
         "metrics-file", "CSV file where run metrics are appended",
         cxxopts::value<std::string>(o.metrics_file));
       }
