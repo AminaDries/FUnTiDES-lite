@@ -36,15 +36,17 @@ AXES = {"x": 0, "y": 1, "z": 2}
 
 
 def lister_snapshots(dossier):
-    """Retourne [(numéro_de_pas, chemin), ...] triés par pas de temps."""
-    fichiers = glob.glob(os.path.join(dossier, "snapshot_*.csv"))
+    """Retourne [(numéro_de_pas, chemin), ...] triés par pas de temps.
+    Accepte les snapshots (snapshot_*.csv) et les slices (slice_*.csv)."""
+    fichiers = (glob.glob(os.path.join(dossier, "snapshot_*.csv"))
+                + glob.glob(os.path.join(dossier, "slice_*.csv")))
     liste = []
     for f in fichiers:
-        m = re.search(r"snapshot_(\d+)\.csv$", f)
+        m = re.search(r"(?:snapshot|slice)_(\d+)\.csv$", f)
         if m:
             liste.append((int(m.group(1)), f))
     if not liste:
-        sys.exit(f"Aucun fichier snapshot_*.csv dans : {dossier}")
+        sys.exit(f"Aucun fichier snapshot_*.csv ou slice_*.csv dans : {dossier}")
     return sorted(liste)
 
 
