@@ -281,7 +281,7 @@ void SEMproxy::run()
       std::chrono::duration<double>(totalComputeTime.time_since_epoch())
           .count(),
       snapshotWriteTime, snapshotCount, snapshotBytes, seismoWriteTime,
-      seismoBytes);
+      seismoBytes, sliceWriteTime, sliceCount, sliceBytes);
 }
 
 // Écrit un snapshot : un fichier CSV avec la pression de tous les noeuds
@@ -345,7 +345,9 @@ std::size_t SEMproxy::saveSlice(int timestep, const arrayReal& field)
 void SEMproxy::writeMetrics(double computeTime, double snapshotWriteTime,
                             int snapshotCount, std::size_t snapshotBytes,
                             double seismoWriteTime,
-                            std::size_t seismoBytes) const
+                            std::size_t seismoBytes,
+                            double sliceWriteTime, int sliceCount,
+                            std::size_t sliceBytes) const
 {
   if (opt_.metrics_file.empty()) return;
 
@@ -368,7 +370,9 @@ void SEMproxy::writeMetrics(double computeTime, double snapshotWriteTime,
     file << "ex,ey,ez,order,nb_nodes,nb_elements,dt,timemax,nb_steps,threads,"
             "snapshots,snap_interval,compute_time_s,snapshot_write_time_s,"
             "snapshot_count,snapshot_bytes,max_rss_kb,nb_receivers,"
-            "seismo_write_time_s,seismo_bytes\n";
+            "seismo_write_time_s,seismo_bytes\n";            "seismo_write_time_s,seismo_bytes,"
+            "slices,slice_axis,slice_pos,slice_write_time_s,"
+            "slice_count,slice_bytes\n";
   }
   file << std::setprecision(9) << opt_.ex << ',' << opt_.ey << ',' << opt_.ez
        << ',' << opt_.order << ',' << m_mesh->getNumberOfNodes() << ','
@@ -377,7 +381,10 @@ void SEMproxy::writeMetrics(double computeTime, double snapshotWriteTime,
        << ',' << snap_time_interval_ << ',' << computeTime << ','
        << snapshotWriteTime << ',' << snapshotCount << ',' << snapshotBytes
        << ',' << usage.ru_maxrss << ',' << nb_receivers_ << ','
-       << seismoWriteTime << ',' << seismoBytes << '\n';
+       << seismoWriteTime << ',' << seismoBytes << ','
+       << (is_slices_ ? 1 : 0) << ',' << slice_axis_ << ',' << slice_pos_
+       << ',' << sliceWriteTime << ',' << sliceCount << ',' << sliceBytes
+       << '\n';
 }
 
 // Initialize arrays
