@@ -170,6 +170,9 @@ void SEMproxy::run()
   double snapshotWriteTime = 0.0;  // secondes passées à écrire les snapshots
   int snapshotCount = 0;           // nombre de snapshots écrits
   std::size_t snapshotBytes = 0;   // octets écrits au total
+  double sliceWriteTime = 0.0;     // secondes passées à écrire les slices
+  int sliceCount = 0;              // nombre de slices écrites
+  std::size_t sliceBytes = 0;      // octets écrits au total (slices)
 
   SEMsolverDataAcoustic solverData(i1, i2, myRHSTerm, pnGlobal, rhsElement,
                                    rhsWeights);
@@ -226,6 +229,21 @@ void SEMproxy::run()
 
       snapshotCount++;
   }
+
+  
+    // Slice du champ d'onde (mêmes pas de temps que les snapshots)
+    if (is_slices_ && indexTimeSample % snap_time_interval_ == 0)
+    {
+      auto startSlice = std::chrono::steady_clock::now();
+
+      sliceBytes += saveSlice(indexTimeSample, solverData.m_pnGlobal);
+
+      sliceWriteTime += std::chrono::duration<double>(
+          std::chrono::steady_clock::now() - startSlice
+      ).count();
+
+      sliceCount++;
+    }
 
     swap(i1, i2);
 
