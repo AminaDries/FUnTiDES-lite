@@ -370,7 +370,7 @@ void SEMproxy::writeMetrics(double computeTime, double snapshotWriteTime,
     file << "ex,ey,ez,order,nb_nodes,nb_elements,dt,timemax,nb_steps,threads,"
             "snapshots,snap_interval,compute_time_s,snapshot_write_time_s,"
             "snapshot_count,snapshot_bytes,max_rss_kb,nb_receivers,"
-            "seismo_write_time_s,seismo_bytes\n";            "seismo_write_time_s,seismo_bytes,"
+            "seismo_write_time_s,seismo_bytes,"
             "slices,slice_axis,slice_pos,slice_write_time_s,"
             "slice_count,slice_bytes\n";
   }
