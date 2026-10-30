@@ -286,6 +286,43 @@ std::size_t SEMproxy::saveSnapshot(int timestep, const arrayReal& field)
   return static_cast<std::size_t>(file.tellp());  // octets écrits
 }
 
+
+// Écrit une slice : un fichier CSV avec la pression des noeuds du plan
+std::size_t SEMproxy::saveSlice(int timestep, const arrayReal& field)
+{
+  // 1. Nom du fichier : slices/slice_000150.csv
+  std::ostringstream name;
+  name << slice_folder_ << "/slice_" << std::setw(6) << std::setfill('0')
+       << timestep << ".csv";
+
+  // 2. Ouvrir le fichier
+  std::ofstream file(name.str());
+  if (!file) throw std::runtime_error("Cannot open " + name.str());
+
+  // 3. Quelle coordonnée tester ? 0 = x, 1 = y, 2 = z
+  int axis = 2;
+  if (slice_axis_ == "x") axis = 0;
+  if (slice_axis_ == "y") axis = 1;
+
+  // 4. Tolérance : on accepte un écart de 1 mm
+  const float tol = 1e-3f;
+
+  // 5. Écrire seulement les noeuds qui sont sur le plan
+  file << "x,y,z,pressure\n";
+  const int nbNodes = m_mesh->getNumberOfNodes();
+  for (int n = 0; n < nbNodes; n++)
+  {
+    if (std::abs(m_mesh->nodeCoord(n, axis) - slice_pos_) > tol) continue;
+
+    file << m_mesh->nodeCoord(n, 0) << ',' << m_mesh->nodeCoord(n, 1) << ','
+         << m_mesh->nodeCoord(n, 2) << ',' << field(n, i1) << '\n';
+  }
+
+  // 6. Renvoyer le nombre d'octets écrits
+  return static_cast<std::size_t>(file.tellp());
+}
+
+
 // Ajoute une ligne dans le fichier de métriques (crée l'en-tête si besoin)
 void SEMproxy::writeMetrics(double computeTime, double snapshotWriteTime,
                             int snapshotCount, std::size_t snapshotBytes,
