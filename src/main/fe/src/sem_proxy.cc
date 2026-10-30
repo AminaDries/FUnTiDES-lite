@@ -62,6 +62,14 @@ SEMproxy::SEMproxy(const SemProxyOptions& opt)
   snap_folder_ = opt.snap_folder;
   if (is_snapshots_) std::filesystem::create_directories(snap_folder_);
 
+
+  // slices
+  is_slices_ = opt.slices;
+  slice_axis_ = opt.slice_axis;
+  slice_pos_ = opt.slice_pos;
+  slice_folder_ = opt.slice_folder;
+  if (is_slices_) std::filesystem::create_directories(slice_folder_);
+
   isElastic_ = opt.isElastic;
   cout << boolalpha;
   bool isElastic = isElastic_;

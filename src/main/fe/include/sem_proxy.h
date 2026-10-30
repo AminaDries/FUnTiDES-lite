@@ -107,6 +107,12 @@ class SEMproxy
   int snap_time_interval_;
   std::string snap_folder_;
 
+  // slices
+  bool is_slices_;
+  std::string slice_axis_;
+  float slice_pos_;
+  std::string slice_folder_;
+
   // physics
   bool isElastic_;
 
