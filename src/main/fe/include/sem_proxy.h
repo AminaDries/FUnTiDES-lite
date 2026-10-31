@@ -21,8 +21,17 @@
 #include <vector>
 
 #include <cstddef>
-
+#include "insitu_stats.h" 
+#include "insitu_sismos.h"
 #include "sem_proxy_options.h"
+
+struct InsituRecord                                               
+{                                                                  
+  int step;                            
+  double time;                              
+  RunningStats stats;        
+  double seconds;      
+};  
 
 /**
  * @class SEMproxy
@@ -86,7 +95,15 @@ class SEMproxy
   void writeMetrics(double computeTime, double snapshotWriteTime,
                     int snapshotCount, std::size_t snapshotBytes,
                     double seismoWriteTime, std::size_t seismoBytes) const;
- private:
+      RunningStats computeStatsHost(const arrayReal& field) const;
+      RunningStats computeStatsDevice(const arrayReal& field) const;
+      void writeInsituStats(const std::vector<InsituRecord>& records) const;
+      void writeInsituSismos(const std::vector<SeismoStream>& streams,
+                             const std::vector<SeismoFinal>& finals,
+                             const std::array<double, 2>& velPeak,
+                             const std::array<double, 2>& velFirst) const;
+
+  private:
   int i1 = 0;
   int i2 = 1;
 
@@ -98,6 +115,8 @@ class SEMproxy
   float domain_size_[3] = {0};
   std::vector<std::array<float, 3>> rcv_coords_;
   int nb_receivers_ = 1;
+  double insitu_sismos_loop_s_ = 0.0;   // temps in-situ sismos dans la boucle
+  double insitu_sismos_final_s_ = 0.0;  // temps in-situ sismos en fin de simulation
   std::string seismo_dir_;
 
   SemProxyOptions opt_;
