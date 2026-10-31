@@ -88,12 +88,21 @@ def main():
         for nom_col, v, t0 in vitesses:
             f.write(f"{nom_col},{v:.6g},{t0:.6g}\n")
 
+    # temps du workflow ad-hoc, pour le benchmark (lecture "à chaud" : les
+    # fichiers viennent d'être écrits par la simulation, donc sont en cache)
+    octets_lus = sum(os.path.getsize(os.path.join(dossier, nom))
+                     for nom in ("seismos.csv", "receivers.csv"))
+    sortie_t = os.path.join(dossier, "adhoc_times.csv")
+    with open(sortie_t, "w") as f:
+        f.write("read_time_s,analysis_time_s,bytes_read\n")
+        f.write(f"{t_lecture:.6g},{t_analyse:.6g},{octets_lus}\n")
+
     print(f"{len(lignes)} récepteurs, {len(t)} pas de temps (dt = {dt:g} s)")
     print(f"Temps de lecture : {t_lecture:.4f} s")
     print(f"Temps d'analyse  : {t_analyse:.4f} s")
     for nom_col, v, t0 in vitesses:
         print(f"Vitesse estimée avec {nom_col} : {v:.1f} m/s (t0 = {t0:.4f} s)")
-    print(f"Résultats écrits dans {sortie} et {sortie_v}")
+    print(f"Résultats écrits dans {sortie}, {sortie_v} et {sortie_t}")
 
 
 if __name__ == "__main__":
