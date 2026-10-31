@@ -188,6 +188,45 @@ def ecrire_resume(lignes, tailles, chemin):
                       f"| {ram:.0f} | {visu:.2f} |\n")
     texte += "## Coût du workflow ad-hoc\n\n" + entete + corps
 
+
+    # ----- Tableau 2 : snapshots vs slices -----
+    entete2 = ("| Éléments | Threads | Snapshots (Mo) | Slices (Mo) | Rapport taille "
+               "| Écriture snap. (s) | Écriture slices (s) | Rapport écriture "
+               "| Image snap. (s) | Image slice (s) "
+               "| Workflow snap. (s) | Workflow slice (s) |\n"
+               "|---|---|---|---|---|---|---|---|---|---|---|---|\n")
+    corps2 = ""
+    for ex in tailles:
+        for th in threads_vus:
+            f_avec = dict(ex=ex, threads=th, mode="avec")
+            f_sl = dict(ex=ex, threads=th, mode="slices")
+
+            # tailles écrites (en Mo)
+            mo_snap = med(lignes, "snapshot_bytes", **f_avec) / 1e6
+            mo_sl = med(lignes, "slice_bytes", **f_sl) / 1e6
+
+            # temps d'écriture pendant la simulation
+            ecr_snap = med(lignes, "snapshot_write_time_s", **f_avec)
+            ecr_sl = med(lignes, "slice_write_time_s", **f_sl)
+
+            # temps pour faire l'image après la simulation
+            img_snap = med(lignes, "viz_snapshot_s", **f_avec)
+            img_sl = med(lignes, "viz_snapshot_s", **f_sl)
+
+            # temps total du workflow = simulation + image
+            wf_snap = med(lignes, "wall_s", **f_avec) + img_snap
+            wf_sl = med(lignes, "wall_s", **f_sl) + img_sl
+
+            # rapports (combien de fois mieux)
+            r_taille = mo_snap / mo_sl if mo_sl > 0 else float("nan")
+            r_ecr = ecr_snap / ecr_sl if ecr_sl > 0 else float("nan")
+
+            corps2 += (f"| {ex}³ | {th} | {mo_snap:.2f} | {mo_sl:.3f} | ×{r_taille:.0f} "
+                       f"| {ecr_snap:.3f} | {ecr_sl:.4f} | ×{r_ecr:.0f} "
+                       f"| {img_snap:.2f} | {img_sl:.2f} "
+                       f"| {wf_snap:.2f} | {wf_sl:.2f} |\n")
+    texte += "\n## Snapshots vs slices\n\n" + entete2 + corps2
+
     if len(threads_vus) > 1:
         ref = threads_vus[0]
         texte += (f"\n## Accélération (référence : {ref} thread(s))\n\n"
