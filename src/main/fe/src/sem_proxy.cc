@@ -170,7 +170,11 @@ void SEMproxy::run()
   const std::size_t velNodes =
       opt_.insitu_vel ? static_cast<std::size_t>(m_mesh->getNumberOfNodes()) : 0;
   std::vector<double> velMax(velNodes, 0.0); 
-  std::vector<int> velStep(velNodes, 0);                   
+  std::vector<int> velStep(velNodes, 0);
+
+  // sismos in-situ : un accumulateur par recepteur (memoire constante)
+  std::vector<SeismoStream> seismoStreams(opt_.insitu_sismos ? nb_receivers_ : 0);
+  double insituSismosTime = 0.0;                   
 
   SEMsolverDataAcoustic solverData(i1, i2, myRHSTerm, pnGlobal, rhsElement,
                                    rhsWeights);
@@ -206,6 +210,18 @@ void SEMproxy::run()
             val += solverData.m_pnGlobal(nodeIdx, i1) * rhsWeightsRcv(r, local);
           }
       pnAtReceiver(r, indexTimeSample) = val;
+    }
+
+    // Sismos in-situ : on ajoute la valeur de ce pas a chaque accumulateur
+    if (opt_.insitu_sismos)
+    {
+      const auto startSismos = std::chrono::steady_clock::now();
+      const double t = indexTimeSample * dt_;  // meme calcul que saveSeismos
+      for (int r = 0; r < nb_receivers_; r++)
+        seismoStreams[r].add(pnAtReceiver(r, indexTimeSample), t);
+      insituSismosTime += std::chrono::duration<double>(
+                              std::chrono::steady_clock::now() - startSismos)
+                              .count();
     }
 
   if (is_snapshots_ && indexTimeSample % snap_time_interval_ == 0)
@@ -325,6 +341,13 @@ void SEMproxy::run()
     std::cout << "---- Data moved to host    : " << bytesPerAnalysis
               << " bytes per analysis." << std::endl;
     }
+
+  if (opt_.insitu_sismos)
+  {
+    writeInsituSismos(seismoStreams);
+    std::cout << "---- In-situ seismo time  : " << insituSismosTime
+              << " seconds (" << nb_receivers_ << " receivers)." << std::endl;
+  }
 
   const auto startSeismo = std::chrono::steady_clock::now();
   saveSeismos();
@@ -596,6 +619,27 @@ void SEMproxy::init_source()
       default:
         throw std::runtime_error("Unsupported order: " + std::to_string(order));
     }
+  }
+}
+
+// Ecrit les stats in-situ des sismos : memes colonnes que analysis/sismos_adhoc.py
+void SEMproxy::writeInsituSismos(const std::vector<SeismoStream>& streams) const
+{
+  // cree le dossier du fichier s'il n'existe pas encore (ex. le dossier des sismos)
+  const auto dossier = std::filesystem::path(opt_.insitu_sismos_file).parent_path();
+  if (!dossier.empty()) std::filesystem::create_directories(dossier);
+
+  std::ofstream out(opt_.insitu_sismos_file);
+  if (!out) throw std::runtime_error("Cannot open " + opt_.insitu_sismos_file);
+  out << std::setprecision(9);
+  out << "receiver,x,y,z,min,max,mean,var,energy,t_peak\n";
+  for (int r = 0; r < nb_receivers_; r++)
+  {
+    const RunningStats& s = streams[r].stats;
+    out << r << ',' << rcv_coords_[r][0] << ',' << rcv_coords_[r][1] << ','
+        << rcv_coords_[r][2] << ',' << s.min << ',' << s.max << ',' << s.mean
+        << ',' << s.variance() << ',' << s.energy * dt_ << ','
+        << streams[r].t_peak << '\n';
   }
 }
 

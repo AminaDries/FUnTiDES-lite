@@ -22,6 +22,7 @@
 
 #include <cstddef>
 #include "insitu_stats.h" 
+#include "insitu_sismos.h"
 #include "sem_proxy_options.h"
 
 struct InsituRecord                                               
@@ -97,6 +98,7 @@ class SEMproxy
       RunningStats computeStatsHost(const arrayReal& field) const;
       RunningStats computeStatsDevice(const arrayReal& field) const;
       void writeInsituStats(const std::vector<InsituRecord>& records) const;
+      void writeInsituSismos(const std::vector<SeismoStream>& streams) const;
 
   private:
   int i1 = 0;
