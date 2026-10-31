@@ -26,6 +26,9 @@
 
 #include <sys/resource.h>
 
+#include <fcntl.h>    
+#include <unistd.h>   
+
 using namespace SourceAndReceiverUtils;
 
 SEMproxy::SEMproxy(const SemProxyOptions& opt)
@@ -174,6 +177,7 @@ void SEMproxy::run()
   int sliceCount = 0;              // nombre de slices écrites
   std::size_t sliceBytes = 0;      // octets écrits au total (slices)
   double sliceExtractTime = 0.0;   // secondes passées à extraire les slices
+  double sliceFsyncTime = 0.0;     // secondes passées dans fsync (slices)
 
   SEMsolverDataAcoustic solverData(i1, i2, myRHSTerm, pnGlobal, rhsElement,
                                    rhsWeights);
@@ -236,7 +240,7 @@ void SEMproxy::run()
     if (is_slices_ && indexTimeSample % snap_time_interval_ == 0)
     {
       sliceBytes += saveSlice(indexTimeSample, solverData.m_pnGlobal,
-                              sliceExtractTime, sliceWriteTime);
+                              sliceExtractTime, sliceWriteTime, sliceFsyncTime);
       sliceCount++;
     }
 
@@ -276,7 +280,8 @@ void SEMproxy::run()
       std::chrono::duration<double>(totalComputeTime.time_since_epoch())
           .count(),
       snapshotWriteTime, snapshotCount, snapshotBytes, seismoWriteTime,
-      seismoBytes, sliceWriteTime, sliceCount, sliceBytes, sliceExtractTime);
+      seismoBytes, sliceWriteTime, sliceCount, sliceBytes, sliceExtractTime,
+      sliceFsyncTime);
 }
 
 // Écrit un snapshot : un fichier CSV avec la pression de tous les noeuds
@@ -302,7 +307,8 @@ std::size_t SEMproxy::saveSnapshot(int timestep, const arrayReal& field)
 // Écrit une slice : un fichier CSV avec la pression des noeuds du plan.
 // Deux phases chronométrées séparément : extraction puis écriture.
 std::size_t SEMproxy::saveSlice(int timestep, const arrayReal& field,
-                                double& extractTime, double& writeTime)
+                                double& extractTime, double& writeTime,
+                                double& fsyncTime)
 {
   // ===== Phase 1 : extraction (traitement in-situ) =====
 #ifdef USE_KOKKOS
@@ -346,6 +352,16 @@ std::size_t SEMproxy::saveSlice(int timestep, const arrayReal& field,
   auto t2 = std::chrono::steady_clock::now();
   writeTime += std::chrono::duration<double>(t2 - t1).count();
 
+  // ===== Phase 3 : fsync (forcer l'écriture réelle sur le disque) =====
+  int fd = ::open(name.str().c_str(), O_WRONLY);
+  if (fd >= 0)
+  {
+    ::fsync(fd);
+    ::close(fd);
+  }
+  auto t3 = std::chrono::steady_clock::now();
+  fsyncTime += std::chrono::duration<double>(t3 - t2).count();
+
   return bytes;
 }
 
@@ -355,7 +371,8 @@ void SEMproxy::writeMetrics(double computeTime, double snapshotWriteTime,
                             double seismoWriteTime,
                             std::size_t seismoBytes,
                             double sliceWriteTime, int sliceCount,
-                            std::size_t sliceBytes, double sliceExtractTime) const
+                            std::size_t sliceBytes, double sliceExtractTime,
+                            double sliceFsyncTime) const
 {
   if (opt_.metrics_file.empty()) return;
 
@@ -380,7 +397,7 @@ void SEMproxy::writeMetrics(double computeTime, double snapshotWriteTime,
             "snapshot_count,snapshot_bytes,max_rss_kb,nb_receivers,"
             "seismo_write_time_s,seismo_bytes,"
             "slices,slice_axis,slice_pos,slice_write_time_s,"
-            "slice_count,slice_bytes,slice_extract_time_s\n";
+            "slice_count,slice_bytes,slice_extract_time_s,slice_fsync_time_s\n";
   }
   file << std::setprecision(9) << opt_.ex << ',' << opt_.ey << ',' << opt_.ez
        << ',' << opt_.order << ',' << m_mesh->getNumberOfNodes() << ','
@@ -392,7 +409,7 @@ void SEMproxy::writeMetrics(double computeTime, double snapshotWriteTime,
        << seismoWriteTime << ',' << seismoBytes << ','
        << (is_slices_ ? 1 : 0) << ',' << slice_axis_ << ',' << slice_pos_
        << ',' << sliceWriteTime << ',' << sliceCount << ',' << sliceBytes
-       << ',' << sliceExtractTime << '\n';
+       << ',' << sliceExtractTime << ',' << sliceFsyncTime << '\n';
 }
 
 // Initialize arrays

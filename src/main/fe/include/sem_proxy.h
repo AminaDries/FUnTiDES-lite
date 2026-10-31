@@ -83,12 +83,14 @@ class SEMproxy
   
   std::size_t saveSnapshot(int timestep, const arrayReal& field);  
   std::size_t saveSlice(int timestep, const arrayReal& field,
-                        double& extractTime, double& writeTime);
+                        double& extractTime, double& writeTime,
+                        double& fsyncTime);
   void writeMetrics(double computeTime, double snapshotWriteTime,
                     int snapshotCount, std::size_t snapshotBytes,
                     double seismoWriteTime, std::size_t seismoBytes,
                     double sliceWriteTime, int sliceCount,
-                    std::size_t sliceBytes, double sliceExtractTime) const;
+                    std::size_t sliceBytes, double sliceExtractTime,
+                    double sliceFsyncTime) const;
  private:
   int i1 = 0;
   int i2 = 1;
@@ -129,7 +131,8 @@ class SEMproxy
   const int sourceOrder = 2;
   int myElementSource = 0;
 
-  std::shared_ptr<model::ModelApi<float, int>> m_mesh;
+  std::shared
+  _ptr<model::ModelApi<float, int>> m_mesh;
   std::unique_ptr<SEMSolverBase> m_solver;
   SolverUtils myUtils;
 
