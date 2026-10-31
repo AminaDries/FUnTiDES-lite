@@ -159,9 +159,18 @@ void SEMproxy::run()
 {
   time_point<system_clock> startComputeTime, startOutputTime, totalComputeTime,
       totalOutputTime;
-  double snapshotWriteTime = 0.0;  // secondes passées à écrire les snapshots
-  int snapshotCount = 0;           // nombre de snapshots écrits
-  std::size_t snapshotBytes = 0;   // octets écrits au total
+  double snapshotWriteTime = 0.0;  
+  int snapshotCount = 0;           
+  std::size_t snapshotBytes = 0;  
+
+    std::vector<InsituRecord> insituRecords; 
+  double insituTime = 0.0;
+  std::vector<int> histSteps;
+  std::vector<std::vector<std::size_t>> histRows;
+  const std::size_t velNodes =
+      opt_.insitu_vel ? static_cast<std::size_t>(m_mesh->getNumberOfNodes()) : 0;
+  std::vector<double> velMax(velNodes, 0.0); 
+  std::vector<int> velStep(velNodes, 0);                   
 
   SEMsolverDataAcoustic solverData(i1, i2, myRHSTerm, pnGlobal, rhsElement,
                                    rhsWeights);
@@ -199,12 +208,6 @@ void SEMproxy::run()
       pnAtReceiver(r, indexTimeSample) = val;
     }
 
-    // Snapshot du champ d'onde (avant le swap : i1 contient le champ qui vient d'etre calcule)
-   // if (is_snapshots_ && indexTimeSample % snap_time_interval_ == 0)
-    //{
-      //saveSnapshot(indexTimeSample, solverData.m_pnGlobal);
-    //}
-    // Snapshot du champ d'onde
   if (is_snapshots_ && indexTimeSample % snap_time_interval_ == 0)
   {
       auto startSnap = std::chrono::steady_clock::now();
@@ -218,7 +221,52 @@ void SEMproxy::run()
 
       snapshotCount++;
   }
+  
+    if (opt_.insitu_vel && indexTimeSample % opt_.insitu_interval == 0)
+    {
+#ifdef USE_KOKKOS
+      Kokkos::fence();
+#endif
+      for (std::size_t n = 0; n < velNodes; ++n)
+      {
+        double v = solverData.m_pnGlobal(static_cast<int>(n), i1);
+        if (v < 0.0) v = -v;
+        if (v > velMax[n])
+        {
+          velMax[n] = v;
+          velStep[n] = indexTimeSample;
+        }
+      }
+    }
 
+    if (opt_.insitu_hist && indexTimeSample % opt_.insitu_interval == 0)
+    {
+#ifdef USE_KOKKOS
+      Kokkos::fence();
+#endif
+      StreamHistogram h;
+      h.init(opt_.insitu_hist_bound, opt_.insitu_hist_bins);
+      for (int n = 0; n < m_mesh->getNumberOfNodes(); ++n)
+      {
+        h.add(solverData.m_pnGlobal(n, i1));
+      }
+      histSteps.push_back(indexTimeSample);
+      histRows.push_back(h.counts);
+    }
+
+    if (opt_.insitu_stats && indexTimeSample % opt_.insitu_interval == 0)
+    {
+      const auto startInsitu = std::chrono::steady_clock::now();
+            const RunningStats s =
+          (opt_.insitu_mode == "host") ? computeStatsHost(solverData.m_pnGlobal)
+                                       : computeStatsDevice(solverData.m_pnGlobal);
+      const double sec = std::chrono::duration<double>(
+                             std::chrono::steady_clock::now() - startInsitu)
+                             .count();
+      insituTime += sec;
+      insituRecords.push_back(
+          {indexTimeSample, static_cast<double>(indexTimeSample) * dt_, s, sec});
+    }
     swap(i1, i2);
 
     auto tmp = solverData.m_i1;
@@ -227,6 +275,56 @@ void SEMproxy::run()
 
     totalOutputTime += system_clock::now() - startOutputTime;
   }
+  
+  if (opt_.insitu_vel)
+  {
+    std::ofstream vf(opt_.insitu_vel_file);
+    if (!vf) throw std::runtime_error("Cannot open " + opt_.insitu_vel_file);
+    vf << "x,y,z,max_abs,step_pic,t_pic\n";
+    for (std::size_t n = 0; n < velNodes; ++n)
+    {
+      const int ni = static_cast<int>(n);
+      vf << m_mesh->nodeCoord(ni, 0) << "," << m_mesh->nodeCoord(ni, 1) << ","
+         << m_mesh->nodeCoord(ni, 2) << "," << velMax[n] << "," << velStep[n]
+         << "," << static_cast<double>(velStep[n]) * dt_ << "\n";
+    }
+    std::cout << "---- In-situ peaks written to " << opt_.insitu_vel_file << " ("
+              << velNodes << " nodes)." << std::endl;
+  }
+
+  if (opt_.insitu_hist)
+  {
+    std::ofstream hf(opt_.insitu_hist_file);
+    if (!hf) throw std::runtime_error("Cannot open " + opt_.insitu_hist_file);
+    hf << "step,t,borne,nb_bins,sous,sur";
+    for (int k = 0; k < opt_.insitu_hist_bins; ++k) hf << ",count_" << k;
+    hf << "\n";
+    for (std::size_t r = 0; r < histRows.size(); ++r)
+    {
+      const auto& c = histRows[r];
+      hf << histSteps[r] << "," << static_cast<double>(histSteps[r]) * dt_
+         << "," << opt_.insitu_hist_bound << "," << opt_.insitu_hist_bins
+         << "," << c[0] << "," << c[opt_.insitu_hist_bins + 1];
+      for (int k = 1; k <= opt_.insitu_hist_bins; ++k) hf << "," << c[k];
+      hf << "\n";
+    }
+    std::cout << "---- In-situ histogram written to " << opt_.insitu_hist_file
+              << " (" << histRows.size() << " histograms)." << std::endl;
+  }
+
+  if (opt_.insitu_stats)
+  {
+    writeInsituStats(insituRecords);
+    std::cout << "---- In-situ analysis time : " << insituTime << " seconds ("
+              << insituRecords.size() << " analyses, mode " << opt_.insitu_mode
+              << ")." << std::endl;
+    const std::size_t bytesPerAnalysis =
+        (opt_.insitu_mode == "host")
+            ? static_cast<std::size_t>(m_mesh->getNumberOfNodes()) * sizeof(float)
+            : sizeof(RunningStats);
+    std::cout << "---- Data moved to host    : " << bytesPerAnalysis
+              << " bytes per analysis." << std::endl;
+    }
 
   const auto startSeismo = std::chrono::steady_clock::now();
   saveSeismos();
@@ -278,7 +376,49 @@ std::size_t SEMproxy::saveSnapshot(int timestep, const arrayReal& field)
   return static_cast<std::size_t>(file.tellp());  // octets écrits
 }
 
-// Ajoute une ligne dans le fichier de métriques (crée l'en-tête si besoin)
+// Statistiques en flux du champ de pression, calculees sur l'hote (CPU).
+RunningStats SEMproxy::computeStatsHost(const arrayReal& field) const
+{
+#ifdef USE_KOKKOS
+  Kokkos::fence();  // attendre la fin des calculs avant de lire sur l'hote
+#endif
+  RunningStats stats;
+  const int nbNodes = m_mesh->getNumberOfNodes();
+  for (int n = 0; n < nbNodes; n++)
+  {
+    stats.add(field(n, i1));
+  }
+
+  return stats;
+}
+
+RunningStats SEMproxy::computeStatsDevice(const arrayReal& field) const
+{
+#ifdef USE_KOKKOS
+  RunningStats result;
+  Kokkos::parallel_reduce("insitu_stats", m_mesh->getNumberOfNodes(),
+                          RunningStatsReducer<arrayReal>{field, i1}, result);
+  return result;
+#else
+  return computeStatsHost(field); 
+#endif
+}
+
+void SEMproxy::writeInsituStats(const std::vector<InsituRecord>& records) const
+{
+  std::ofstream file(opt_.insitu_file);
+  if (!file) throw std::runtime_error("Cannot open " + opt_.insitu_file);
+  file << std::setprecision(10);
+  file << "step,t,min,max,mean,var,max_abs,energie,insitu_s\n";
+  for (const auto& r : records)
+  {
+    file << r.step << ',' << r.time << ',' << r.stats.min << ','
+         << r.stats.max << ',' << r.stats.mean << ',' << r.stats.variance()
+         << ',' << r.stats.max_abs << ',' << r.stats.energy << ',' << r.seconds
+         << '\n';
+  }
+}
+
 void SEMproxy::writeMetrics(double computeTime, double snapshotWriteTime,
                             int snapshotCount, std::size_t snapshotBytes,
                             double seismoWriteTime,
@@ -286,7 +426,6 @@ void SEMproxy::writeMetrics(double computeTime, double snapshotWriteTime,
 {
   if (opt_.metrics_file.empty()) return;
 
-  // RAM maximale utilisée par le processus (en Ko sous Linux)
   struct rusage usage;
   getrusage(RUSAGE_SELF, &usage);
 
