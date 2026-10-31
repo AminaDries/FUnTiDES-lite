@@ -1,6 +1,9 @@
 #pragma once
 #include <cstddef>
 
+#include <cstddef>
+#include <vector>
+
 #ifdef USE_KOKKOS
 #include <Kokkos_Core.hpp>
 #define INSITU_FN KOKKOS_INLINE_FUNCTION
@@ -74,3 +77,27 @@ struct RunningStatsReducer
   }
 };
 #endif
+
+struct StreamHistogram {
+  double bound = 1.0;
+  int nbins = 50;
+  std::vector<std::size_t> counts;
+
+  void init(double b, int n) {
+    bound = b;
+    nbins = n;
+    counts.assign(n + 2, 0);
+  }
+
+  void add(double x) {
+    if (x < -bound) {
+      ++counts[0];
+    } else if (x > bound) {
+      ++counts[nbins + 1];
+    } else {
+      int k = static_cast<int>((x + bound) / (2.0 * bound) * nbins);
+      if (k >= nbins) k = nbins - 1;  // cas x == +bound
+      ++counts[k + 1];
+    }
+  }
+};

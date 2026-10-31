@@ -13,17 +13,17 @@ class SemProxyOptions
   float lx = 2000.f, ly = 2000.f, lz = 2000.f;
   float srcx = 1010.f, srcy = 1010.f, srcz = 1010.f;
   float rcvx = 1410.f, rcvy = 1010.f, rcvz = 1010.f;
-  std::string implem = "makutu";  // makutu|shiva
-  std::string method = "sem";     // sem|dg
+  std::string implem = "makutu"; 
+  std::string method = "sem";    
   std::string mesh = "cartesian";
   float dt = 0.001;
   float timemax = 1.5;
   bool autodt = false;
-  // sponge boundaries parameters
+  
   float boundaries_size = 0;
   bool surface_sponge = false;
   float taper_delta = 0.015;
-  // Boolean to tell if the model is charged on nodes or on element
+  
   bool isModelOnNodes = false;
   bool isElastic = false;
 
@@ -35,14 +35,18 @@ class SemProxyOptions
   int snap_interval = 20;                 
   std::string snap_folder = "snapshots";     
 
-  // Fichier des metrics
   std::string metrics_file = "";
 
-  // In-situ : statistiques calculees pendant la simulation
   bool insitu_stats = false;                      
   int insitu_interval = 1;                        
   std::string insitu_file = "insitu_stats.csv";
   std::string insitu_mode = "device";
+  bool insitu_hist = false;
+  int insitu_hist_bins = 50;
+  double insitu_hist_bound = 1.0;
+  std::string insitu_hist_file = "insitu_hist.csv";
+  bool insitu_vel = false;
+  std::string insitu_vel_file = "insitu_vel.csv";
   
 
   void validate() const
@@ -54,13 +58,16 @@ class SemProxyOptions
       throw std::runtime_error("lx/ly/lz must be > 0");
     if (snap_interval <= 0)
       throw std::runtime_error("snap-interval must be > 0");
-    if (insitu_interval <= 0)                                          // NOUVEAU
+    if (insitu_interval <= 0)                                          
       throw std::runtime_error("insitu-interval must be > 0"); 
         if (insitu_mode != "device" && insitu_mode != "host")
       throw std::runtime_error("insitu-mode must be device or host");
+    if (insitu_hist_bins <= 0)
+      throw std::runtime_error("insitu-hist-bins must be > 0");
+    if (insitu_hist_bound <= 0.0)
+      throw std::runtime_error("insitu-hist-bound must be > 0");
     }
 
-  // Bind CLI flags to this instance (no --help here)
   static void bind_cli(cxxopts::Options& opts, SemProxyOptions& o)
   {
     opts.add_options()("o,order", "Order of approximation",
@@ -116,6 +123,18 @@ class SemProxyOptions
         "insitu-file", "CSV file where in-situ statistics are written",
         cxxopts::value<std::string>(o.insitu_file))(
         "insitu-mode", "Where to compute in-situ stats: device|host",
-        cxxopts::value<std::string>(o.insitu_mode));
+        cxxopts::value<std::string>(o.insitu_mode))(
+        "insitu-hist", "Compute a streaming histogram in-situ",
+        cxxopts::value<bool>(o.insitu_hist))(
+        "insitu-hist-bins", "Number of histogram bins",
+        cxxopts::value<int>(o.insitu_hist_bins))(
+        "insitu-hist-bound", "Histogram covers [-bound, +bound]",
+        cxxopts::value<double>(o.insitu_hist_bound))(
+        "insitu-hist-file", "CSV file where the histogram is written",
+        cxxopts::value<std::string>(o.insitu_hist_file))(
+        "insitu-vel", "Track per-node peak |p| and its time in-situ",
+        cxxopts::value<bool>(o.insitu_vel))(
+        "insitu-vel-file", "CSV file where per-node peaks are written",
+        cxxopts::value<std::string>(o.insitu_vel_file));
       }
 };
