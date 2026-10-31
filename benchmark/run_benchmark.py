@@ -49,6 +49,7 @@ COLONNES_NOMBRES = [
     "snapshot_write_time_s", "snapshot_count", "snapshot_bytes", "max_rss_kb",
     "nb_receivers", "seismo_write_time_s", "seismo_bytes",
     "slices", "slice_pos", "slice_write_time_s", "slice_count", "slice_bytes",
+    "slice_extract_time_s",
 ]
 
 # Colonnes écrites dans benchmark.csv
@@ -57,7 +58,7 @@ COLONNES_SORTIE = [
     "compute_time_s", "snapshot_write_time_s", "seismo_write_time_s",
     "snapshot_count", "snapshot_bytes", "seismo_bytes", "max_rss_kb",
     "nb_nodes", "nb_steps", "viz_snapshot_s", "viz_sismos_s", "viz_s",
-    "slice_write_time_s", "slice_count", "slice_bytes",
+    "slice_write_time_s", "slice_count", "slice_bytes", "slice_extract_time_s",
 ]
 
 
@@ -192,10 +193,10 @@ def ecrire_resume(lignes, tailles, chemin):
 
     # ----- Tableau 2 : snapshots vs slices -----
     entete2 = ("| Éléments | Threads | Snapshots (Mo) | Slices (Mo) | Rapport taille "
-               "| Écriture snap. (s) | Écriture slices (s) | Rapport écriture "
+               "| Écriture snap. (s) | Extraction slices (s) | Écriture slices (s) | Rapport écriture "
                "| Image snap. (s) | Image slice (s) "
                "| Workflow snap. (s) | Workflow slice (s) |\n"
-               "|---|---|---|---|---|---|---|---|---|---|---|---|\n")
+               "|---|---|---|---|---|---|---|---|---|---|---|---|---|\n")
     corps2 = ""
     for ex in tailles:
         for th in threads_vus:
@@ -209,6 +210,7 @@ def ecrire_resume(lignes, tailles, chemin):
             # temps d'écriture pendant la simulation
             ecr_snap = med(lignes, "snapshot_write_time_s", **f_avec)
             ecr_sl = med(lignes, "slice_write_time_s", **f_sl)
+            ext_sl = med(lignes, "slice_extract_time_s", **f_sl)
 
             # temps pour faire l'image après la simulation
             img_snap = med(lignes, "viz_snapshot_s", **f_avec)
@@ -220,10 +222,11 @@ def ecrire_resume(lignes, tailles, chemin):
 
             # rapports (combien de fois mieux)
             r_taille = mo_snap / mo_sl if mo_sl > 0 else float("nan")
-            r_ecr = ecr_snap / ecr_sl if ecr_sl > 0 else float("nan")
+            cout_sl = ext_sl + ecr_sl   # coût total d'une slice pendant la simulation
+            r_ecr = ecr_snap / cout_sl if cout_sl > 0 else float("nan")
 
             corps2 += (f"| {ex}³ | {th} | {mo_snap:.2f} | {mo_sl:.3f} | ×{r_taille:.0f} "
-                       f"| {ecr_snap:.3f} | {ecr_sl:.4f} | ×{r_ecr:.0f} "
+                       f"| {ecr_snap:.3f} | {ext_sl:.4f} | {ecr_sl:.4f} | ×{r_ecr:.0f} "
                        f"| {img_snap:.2f} | {img_sl:.2f} "
                        f"| {wf_snap:.2f} | {wf_sl:.2f} |\n")
     texte += "\n## Snapshots vs slices\n\n" + entete2 + corps2
@@ -302,6 +305,8 @@ def tracer(lignes, tailles, dossier):
         tailles_mo = [med(lignes, col_taille, ex=ex, threads=th, mode=mode) / 1e6
                       for ex in tailles]
         ecritures = [med(lignes, col_ecriture, ex=ex, threads=th, mode=mode)
+                     + (med(lignes, "slice_extract_time_s", ex=ex, threads=th, mode=mode)
+                        if mode == "slices" else 0)
                      for ex in tailles]
         totaux = [med(lignes, "wall_s", ex=ex, threads=th, mode=mode)
                   + med(lignes, "viz_snapshot_s", ex=ex, threads=th, mode=mode)
@@ -310,9 +315,12 @@ def tracer(lignes, tailles, dossier):
         b2.plot(elements, ecritures, "o-", label=nom)
         b3.plot(elements, totaux, "o-", label=nom)
 
+    b2.plot(elements, [med(lignes, "slice_extract_time_s", ex=ex, threads=th, mode="slices")
+                    for ex in tailles], "o--", label="slices : extraction seule")
+
     b1.set_title("Volume écrit sur disque")
     b1.set_ylabel("taille (Mo)")
-    b2.set_title("Temps d'écriture pendant la simulation")
+    b2.set_title("Coût de la sortie pendant la simulation")
     b2.set_ylabel("temps (s)")
     b3.set_title("Workflow total (simulation + image)")
     b3.set_ylabel("temps (s)")
