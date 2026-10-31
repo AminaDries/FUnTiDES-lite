@@ -376,6 +376,8 @@ void SEMproxy::run()
                                  std::chrono::steady_clock::now() - startFinal)
                                  .count();
 
+    insitu_sismos_loop_s_ = insituSismosTime;  // pour metrics.csv
+    insitu_sismos_final_s_ = finalTime;
     writeInsituSismos(seismoStreams, finals, velPeak, velFirst);
     std::cout << "---- In-situ seismo time  : " << insituSismosTime
               << " seconds in the loop + " << finalTime
@@ -501,7 +503,8 @@ void SEMproxy::writeMetrics(double computeTime, double snapshotWriteTime,
     file << "ex,ey,ez,order,nb_nodes,nb_elements,dt,timemax,nb_steps,threads,"
             "snapshots,snap_interval,compute_time_s,snapshot_write_time_s,"
             "snapshot_count,snapshot_bytes,max_rss_kb,nb_receivers,"
-            "seismo_write_time_s,seismo_bytes\n";
+            "seismo_write_time_s,seismo_bytes,"
+            "insitu_sismos,insitu_sismos_loop_s,insitu_sismos_final_s\n";
   }
   file << std::setprecision(9) << opt_.ex << ',' << opt_.ey << ',' << opt_.ez
        << ',' << opt_.order << ',' << m_mesh->getNumberOfNodes() << ','
@@ -510,7 +513,9 @@ void SEMproxy::writeMetrics(double computeTime, double snapshotWriteTime,
        << ',' << snap_time_interval_ << ',' << computeTime << ','
        << snapshotWriteTime << ',' << snapshotCount << ',' << snapshotBytes
        << ',' << usage.ru_maxrss << ',' << nb_receivers_ << ','
-       << seismoWriteTime << ',' << seismoBytes << '\n';
+       << seismoWriteTime << ',' << seismoBytes << ','
+       << (opt_.insitu_sismos ? 1 : 0) << ',' << insitu_sismos_loop_s_ << ','
+       << insitu_sismos_final_s_ << '\n';
 }
 
 // Initialize arrays
