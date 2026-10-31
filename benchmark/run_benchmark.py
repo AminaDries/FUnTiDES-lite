@@ -49,7 +49,7 @@ COLONNES_NOMBRES = [
     "snapshot_write_time_s", "snapshot_count", "snapshot_bytes", "max_rss_kb",
     "nb_receivers", "seismo_write_time_s", "seismo_bytes",
     "slices", "slice_pos", "slice_write_time_s", "slice_count", "slice_bytes",
-    "slice_extract_time_s",
+    "slice_extract_time_s", "slice_fsync_time_s",
 ]
 
 # Colonnes écrites dans benchmark.csv
@@ -59,6 +59,7 @@ COLONNES_SORTIE = [
     "snapshot_count", "snapshot_bytes", "seismo_bytes", "max_rss_kb",
     "nb_nodes", "nb_steps", "viz_snapshot_s", "viz_sismos_s", "viz_s",
     "slice_write_time_s", "slice_count", "slice_bytes", "slice_extract_time_s",
+    "slice_fsync_time_s",
 ]
 
 
@@ -159,6 +160,12 @@ def med(lignes, cle, **filtre):
             if all(l[k] == v for k, v in filtre.items()) and l[cle] is not None]
     return statistics.median(vals) if vals else float("nan")
 
+def minmax(lignes, cle, **filtre):
+    """(min, max) de la colonne `cle` sur les lignes qui vérifient le filtre."""
+    vals = [l[cle] for l in lignes
+            if all(l[k] == v for k, v in filtre.items()) and l[cle] is not None]
+    return (min(vals), max(vals)) if vals else (float("nan"), float("nan"))
+
 
 def ecrire_resume(lignes, tailles, chemin):
     """Tableaux Markdown (médianes) : à coller dans le rapport."""
@@ -193,10 +200,10 @@ def ecrire_resume(lignes, tailles, chemin):
 
     # ----- Tableau 2 : snapshots vs slices -----
     entete2 = ("| Éléments | Threads | Snapshots (Mo) | Slices (Mo) | Rapport taille "
-               "| Écriture snap. (s) | Extraction slices (s) | Écriture slices (s) | Rapport écriture "
+               "| Écriture snap. (s) | Extraction slices (s) | Écriture slices (s) | fsync slices (s) | Rapport écriture "
                "| Image snap. (s) | Image slice (s) "
                "| Workflow snap. (s) | Workflow slice (s) |\n"
-               "|---|---|---|---|---|---|---|---|---|---|---|---|---|\n")
+               "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n")
     corps2 = ""
     for ex in tailles:
         for th in threads_vus:
@@ -211,6 +218,7 @@ def ecrire_resume(lignes, tailles, chemin):
             ecr_snap = med(lignes, "snapshot_write_time_s", **f_avec)
             ecr_sl = med(lignes, "slice_write_time_s", **f_sl)
             ext_sl = med(lignes, "slice_extract_time_s", **f_sl)
+            fs_sl = med(lignes, "slice_fsync_time_s", **f_sl)
 
             # temps pour faire l'image après la simulation
             img_snap = med(lignes, "viz_snapshot_s", **f_avec)
@@ -226,10 +234,29 @@ def ecrire_resume(lignes, tailles, chemin):
             r_ecr = ecr_snap / cout_sl if cout_sl > 0 else float("nan")
 
             corps2 += (f"| {ex}³ | {th} | {mo_snap:.2f} | {mo_sl:.3f} | ×{r_taille:.0f} "
-                       f"| {ecr_snap:.3f} | {ext_sl:.4f} | {ecr_sl:.4f} | ×{r_ecr:.0f} "
+                       f"| {ecr_snap:.3f} | {ext_sl:.4f} | {ecr_sl:.4f} | {fs_sl:.4f} | ×{r_ecr:.0f} "
                        f"| {img_snap:.2f} | {img_sl:.2f} "
                        f"| {wf_snap:.2f} | {wf_sl:.2f} |\n")
     texte += "\n## Snapshots vs slices\n\n" + entete2 + corps2
+
+    # ----- Tableau 3 : dispersion -----
+    n_rep = len([l for l in lignes if l["mode"] == "sans"
+                 and l["ex"] == tailles[0] and l["threads"] == threads_vus[0]])
+    entete3 = ("| Éléments | Mode | Simulation (s) | Image (s) |\n"
+               "|---|---|---|---|\n")
+    corps3 = ""
+    for ex in tailles:
+        for th in threads_vus:
+            for mode in ("sans", "avec", "slices"):
+                f = dict(ex=ex, threads=th, mode=mode)
+                cases = []
+                for cle in ("wall_s", "viz_snapshot_s"):
+                    m = med(lignes, cle, **f)
+                    lo, hi = minmax(lignes, cle, **f)
+                    cases.append(f"{m:.3f} [{lo:.3f} – {hi:.3f}]")
+                corps3 += f"| {ex}³ | {mode} | {cases[0]} | {cases[1]} |\n"
+    texte += (f"\n## Dispersion : médiane [min – max] sur {n_rep} répétitions "
+              f"(chauffe écartée)\n\n" + entete3 + corps3)
 
     if len(threads_vus) > 1:
         ref = threads_vus[0]
@@ -363,7 +390,8 @@ def main():
     ap.add_argument("--exe", required=True)
     ap.add_argument("--sizes", type=int, nargs="+", default=[10, 20, 30])
     ap.add_argument("--threads", type=int, nargs="+", default=None)
-    ap.add_argument("--repeats", type=int, default=3)
+    ap.add_argument("--repeats", type=int, default=5)
+    ap.add_argument("--warmup", type=int, default=1)
     ap.add_argument("--timemax", type=float, default=0.2)
     ap.add_argument("--snap-interval", type=int, default=25)
     ap.add_argument("--viz-dir", default="visualisation")
@@ -391,17 +419,21 @@ def main():
 
     liste_threads = args.threads or [None]
     lignes = []
-    total_runs = len(args.sizes) * len(liste_threads) * 3 * args.repeats
+    total_runs = len(args.sizes) * len(liste_threads) * 3 * (args.warmup + args.repeats)
     n = 0
     dossier_run = os.path.join(out, "run_tmp")
     for ex in args.sizes:
         for th in liste_threads:
             for mode in ("sans", "avec", "slices"):
-                for run in range(1, args.repeats + 1):
+                for run in range(args.warmup + args.repeats):
                     n += 1
+                    chauffe = run < args.warmup   # les premières exécutions ne comptent pas
+                    etiquette = "chauffe" if chauffe else f"essai {run - args.warmup + 1}"
                     print(f"[{n}/{total_runs}] maillage {ex}³, threads={th or 'défaut'}, "
-                          f"mode {mode}, essai {run}", flush=True)
-                    lignes.append(lancer(exe, ex, th, mode, run, args, dossier_run, fichier_rcv))
+                          f"mode {mode}, {etiquette}", flush=True)
+                    mesure = lancer(exe, ex, th, mode, run + 1, args, dossier_run, fichier_rcv)
+                    if not chauffe:
+                        lignes.append(mesure)
     shutil.rmtree(dossier_run, ignore_errors=True)
 
     with open(os.path.join(out, "benchmark.csv"), "w", newline="") as f:
