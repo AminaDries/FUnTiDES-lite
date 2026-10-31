@@ -131,8 +131,7 @@ class SEMproxy
   const int sourceOrder = 2;
   int myElementSource = 0;
 
-  std::shared
-  _ptr<model::ModelApi<float, int>> m_mesh;
+  std::shared_ptr<model::ModelApi<float, int>> m_mesh;
   std::unique_ptr<SEMSolverBase> m_solver;
   SolverUtils myUtils;
 
