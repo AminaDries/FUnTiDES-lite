@@ -21,8 +21,16 @@
 #include <vector>
 
 #include <cstddef>
-
+#include "insitu_stats.h" 
 #include "sem_proxy_options.h"
+
+struct InsituRecord                                               
+{                                                                  
+  int step;                            
+  double time;                              
+  RunningStats stats;        
+  double seconds;      
+};  
 
 /**
  * @class SEMproxy
@@ -86,7 +94,10 @@ class SEMproxy
   void writeMetrics(double computeTime, double snapshotWriteTime,
                     int snapshotCount, std::size_t snapshotBytes,
                     double seismoWriteTime, std::size_t seismoBytes) const;
- private:
+      RunningStats computeStatsHost(const arrayReal& field) const;
+  void writeInsituStats(const std::vector<InsituRecord>& records) const;
+
+  private:
   int i1 = 0;
   int i2 = 1;
 

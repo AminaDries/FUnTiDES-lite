@@ -163,6 +163,9 @@ void SEMproxy::run()
   int snapshotCount = 0;           // nombre de snapshots écrits
   std::size_t snapshotBytes = 0;   // octets écrits au total
 
+    std::vector<InsituRecord> insituRecords; 
+  double insituTime = 0.0;                  
+
   SEMsolverDataAcoustic solverData(i1, i2, myRHSTerm, pnGlobal, rhsElement,
                                    rhsWeights);
 
@@ -218,7 +221,18 @@ void SEMproxy::run()
 
       snapshotCount++;
   }
-
+  
+    if (opt_.insitu_stats && indexTimeSample % opt_.insitu_interval == 0)
+    {
+      const auto startInsitu = std::chrono::steady_clock::now();
+      const RunningStats s = computeStatsHost(solverData.m_pnGlobal);
+      const double sec = std::chrono::duration<double>(
+                             std::chrono::steady_clock::now() - startInsitu)
+                             .count();
+      insituTime += sec;
+      insituRecords.push_back(
+          {indexTimeSample, static_cast<double>(indexTimeSample) * dt_, s, sec});
+    }
     swap(i1, i2);
 
     auto tmp = solverData.m_i1;
@@ -226,6 +240,13 @@ void SEMproxy::run()
     solverData.m_i2 = tmp;
 
     totalOutputTime += system_clock::now() - startOutputTime;
+  }
+  
+  if (opt_.insitu_stats)
+  {
+    writeInsituStats(insituRecords);
+    std::cout << "---- In-situ analysis time : " << insituTime << " seconds ("
+              << insituRecords.size() << " analyses)." << std::endl;
   }
 
   const auto startSeismo = std::chrono::steady_clock::now();
@@ -276,6 +297,37 @@ std::size_t SEMproxy::saveSnapshot(int timestep, const arrayReal& field)
          << m_mesh->nodeCoord(n, 2) << ',' << field(n, i1) << '\n';
   }
   return static_cast<std::size_t>(file.tellp());  // octets écrits
+}
+
+// Statistiques en flux du champ de pression, calculees sur l'hote (CPU).
+RunningStats SEMproxy::computeStatsHost(const arrayReal& field) const
+{
+#ifdef USE_KOKKOS
+  Kokkos::fence();  // attendre la fin des calculs avant de lire sur l'hote
+#endif
+  RunningStats stats;
+  const int nbNodes = m_mesh->getNumberOfNodes();
+  for (int n = 0; n < nbNodes; n++)
+  {
+    stats.add(field(n, i1));
+  }
+  return stats;
+}
+
+// Ecrit les resultats in-situ (une ligne par analyse). Memes colonnes que l'ad-hoc.
+void SEMproxy::writeInsituStats(const std::vector<InsituRecord>& records) const
+{
+  std::ofstream file(opt_.insitu_file);
+  if (!file) throw std::runtime_error("Cannot open " + opt_.insitu_file);
+  file << std::setprecision(10);
+  file << "step,t,min,max,mean,var,max_abs,energie,insitu_s\n";
+  for (const auto& r : records)
+  {
+    file << r.step << ',' << r.time << ',' << r.stats.min << ','
+         << r.stats.max << ',' << r.stats.mean << ',' << r.stats.variance()
+         << ',' << r.stats.max_abs << ',' << r.stats.energy << ',' << r.seconds
+         << '\n';
+  }
 }
 
 // Ajoute une ligne dans le fichier de métriques (crée l'en-tête si besoin)
