@@ -117,6 +117,7 @@ class SEMproxy
   int nb_receivers_ = 1;
   double insitu_sismos_loop_s_ = 0.0;   // temps in-situ sismos dans la boucle
   double insitu_sismos_final_s_ = 0.0;  // temps in-situ sismos en fin de simulation
+  double seismo_fsync_s_ = 0.0;         // temps du fsync de seismos.csv
   std::string seismo_dir_;
 
   SemProxyOptions opt_;

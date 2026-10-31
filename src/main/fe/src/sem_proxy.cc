@@ -24,7 +24,9 @@
 #include <filesystem>
 #include <fstream>
 
+#include <fcntl.h>   // open (pour fsync)
 #include <sys/resource.h>
+#include <unistd.h>  // fsync, close
 
 using namespace SourceAndReceiverUtils;
 
@@ -396,6 +398,25 @@ void SEMproxy::run()
   std::cout << "---- Seismo write time   : " << seismoWriteTime
             << " seconds." << std::endl;
 
+  // Persistance (annexe, section 3) : l'ecriture ci-dessus s'arrete quand les
+  // donnees sont dans le cache du systeme ; fsync attend qu'elles soient sur
+  // le disque. On chronometre fsync a part : persistance = ecriture + fsync.
+  const auto startSync = std::chrono::steady_clock::now();
+  for (const char* nom : {"/seismos.csv", "/receivers.csv"})
+  {
+    const int fd = ::open((seismo_dir_ + nom).c_str(), O_RDONLY);
+    if (fd >= 0)
+    {
+      ::fsync(fd);
+      ::close(fd);
+    }
+  }
+  seismo_fsync_s_ = std::chrono::duration<double>(
+                        std::chrono::steady_clock::now() - startSync)
+                        .count();
+  std::cout << "---- Seismo fsync time   : " << seismo_fsync_s_ << " seconds."
+            << std::endl;
+
   float kerneltime_ms = time_point_cast<microseconds>(totalComputeTime)
                             .time_since_epoch()
                             .count();
@@ -504,7 +525,8 @@ void SEMproxy::writeMetrics(double computeTime, double snapshotWriteTime,
             "snapshots,snap_interval,compute_time_s,snapshot_write_time_s,"
             "snapshot_count,snapshot_bytes,max_rss_kb,nb_receivers,"
             "seismo_write_time_s,seismo_bytes,"
-            "insitu_sismos,insitu_sismos_loop_s,insitu_sismos_final_s\n";
+            "insitu_sismos,insitu_sismos_loop_s,insitu_sismos_final_s,"
+            "seismo_fsync_time_s\n";
   }
   file << std::setprecision(9) << opt_.ex << ',' << opt_.ey << ',' << opt_.ez
        << ',' << opt_.order << ',' << m_mesh->getNumberOfNodes() << ','
@@ -515,7 +537,7 @@ void SEMproxy::writeMetrics(double computeTime, double snapshotWriteTime,
        << ',' << usage.ru_maxrss << ',' << nb_receivers_ << ','
        << seismoWriteTime << ',' << seismoBytes << ','
        << (opt_.insitu_sismos ? 1 : 0) << ',' << insitu_sismos_loop_s_ << ','
-       << insitu_sismos_final_s_ << '\n';
+       << insitu_sismos_final_s_ << ',' << seismo_fsync_s_ << '\n';
 }
 
 // Initialize arrays
