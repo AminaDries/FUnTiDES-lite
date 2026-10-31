@@ -98,7 +98,10 @@ class SEMproxy
       RunningStats computeStatsHost(const arrayReal& field) const;
       RunningStats computeStatsDevice(const arrayReal& field) const;
       void writeInsituStats(const std::vector<InsituRecord>& records) const;
-      void writeInsituSismos(const std::vector<SeismoStream>& streams) const;
+      void writeInsituSismos(const std::vector<SeismoStream>& streams,
+                             const std::vector<SeismoFinal>& finals,
+                             const std::array<double, 2>& velPeak,
+                             const std::array<double, 2>& velFirst) const;
 
   private:
   int i1 = 0;

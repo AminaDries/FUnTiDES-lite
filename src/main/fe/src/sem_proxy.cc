@@ -344,9 +344,43 @@ void SEMproxy::run()
 
   if (opt_.insitu_sismos)
   {
-    writeInsituSismos(seismoStreams);
+    // Analyses de fin de simulation, sur le signal deja en memoire
+    const auto startFinal = std::chrono::steady_clock::now();
+    std::vector<double> t(num_sample_);
+    for (int n = 0; n < num_sample_; n++) t[n] = n * dt_;  // meme calcul que saveSeismos
+
+    std::vector<SeismoFinal> finals(nb_receivers_);
+    std::vector<double> dist(nb_receivers_), tPeak(nb_receivers_),
+        tFirst(nb_receivers_);
+    for (int r = 0; r < nb_receivers_; r++)
+    {
+      std::vector<double> p(num_sample_);
+      for (int n = 0; n < num_sample_; n++) p[n] = pnAtReceiver(r, n);
+      finals[r] = analyseFinale(p, t, dt_, seismoStreams[r]);
+
+      const double dx = rcv_coords_[r][0] - src_coord_[0];
+      const double dy = rcv_coords_[r][1] - src_coord_[1];
+      const double dz = rcv_coords_[r][2] - src_coord_[2];
+      dist[r] = std::sqrt(dx * dx + dy * dy + dz * dz);
+      tPeak[r] = seismoStreams[r].t_peak;
+      tFirst[r] = finals[r].t_first;
+    }
+    // la regression a besoin d'au moins 2 recepteurs a des distances differentes
+    std::array<double, 2> velPeak = {0, 0}, velFirst = {0, 0};
+    if (nb_receivers_ >= 2)
+    {
+      velPeak = regressionVitesse(dist, tPeak);
+      velFirst = regressionVitesse(dist, tFirst);
+    }
+    const double finalTime = std::chrono::duration<double>(
+                                 std::chrono::steady_clock::now() - startFinal)
+                                 .count();
+
+    writeInsituSismos(seismoStreams, finals, velPeak, velFirst);
     std::cout << "---- In-situ seismo time  : " << insituSismosTime
-              << " seconds (" << nb_receivers_ << " receivers)." << std::endl;
+              << " seconds in the loop + " << finalTime
+              << " seconds at the end (" << nb_receivers_ << " receivers)."
+              << std::endl;
   }
 
   const auto startSeismo = std::chrono::steady_clock::now();
@@ -623,7 +657,10 @@ void SEMproxy::init_source()
 }
 
 // Ecrit les stats in-situ des sismos : memes colonnes que analysis/sismos_adhoc.py
-void SEMproxy::writeInsituSismos(const std::vector<SeismoStream>& streams) const
+void SEMproxy::writeInsituSismos(const std::vector<SeismoStream>& streams,
+                                 const std::vector<SeismoFinal>& finals,
+                                 const std::array<double, 2>& velPeak,
+                                 const std::array<double, 2>& velFirst) const
 {
   // cree le dossier du fichier s'il n'existe pas encore (ex. le dossier des sismos)
   const auto dossier = std::filesystem::path(opt_.insitu_sismos_file).parent_path();
@@ -632,15 +669,27 @@ void SEMproxy::writeInsituSismos(const std::vector<SeismoStream>& streams) const
   std::ofstream out(opt_.insitu_sismos_file);
   if (!out) throw std::runtime_error("Cannot open " + opt_.insitu_sismos_file);
   out << std::setprecision(9);
-  out << "receiver,x,y,z,min,max,mean,var,energy,t_peak\n";
+  out << "receiver,x,y,z,min,max,mean,var,energy,t_peak,t_first,f_dom,"
+         "f_dom_direct\n";
   for (int r = 0; r < nb_receivers_; r++)
   {
     const RunningStats& s = streams[r].stats;
     out << r << ',' << rcv_coords_[r][0] << ',' << rcv_coords_[r][1] << ','
         << rcv_coords_[r][2] << ',' << s.min << ',' << s.max << ',' << s.mean
         << ',' << s.variance() << ',' << s.energy * dt_ << ','
-        << streams[r].t_peak << '\n';
+        << streams[r].t_peak << ',' << finals[r].t_first << ','
+        << finals[r].f_dom << ',' << finals[r].f_dom_direct << '\n';
   }
+
+  // vitesse : fichier a cote, meme format que velocity_sismos.csv (ad-hoc)
+  const std::string fv =
+      (dossier.empty() ? std::string("") : dossier.string() + "/") +
+      "insitu_velocity_sismos.csv";
+  std::ofstream vel(fv);
+  if (!vel) throw std::runtime_error("Cannot open " + fv);
+  vel << std::setprecision(6) << "method,velocity,t0\n"
+      << "t_peak," << velPeak[0] << ',' << velPeak[1] << '\n'
+      << "t_first," << velFirst[0] << ',' << velFirst[1] << '\n';
 }
 
 void SEMproxy::saveSeismos()
