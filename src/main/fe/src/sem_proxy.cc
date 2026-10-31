@@ -173,6 +173,7 @@ void SEMproxy::run()
   double sliceWriteTime = 0.0;     // secondes passées à écrire les slices
   int sliceCount = 0;              // nombre de slices écrites
   std::size_t sliceBytes = 0;      // octets écrits au total (slices)
+  double sliceExtractTime = 0.0;   // secondes passées à extraire les slices
 
   SEMsolverDataAcoustic solverData(i1, i2, myRHSTerm, pnGlobal, rhsElement,
                                    rhsWeights);
@@ -234,14 +235,8 @@ void SEMproxy::run()
     // Slice du champ d'onde (mêmes pas de temps que les snapshots)
     if (is_slices_ && indexTimeSample % snap_time_interval_ == 0)
     {
-      auto startSlice = std::chrono::steady_clock::now();
-
-      sliceBytes += saveSlice(indexTimeSample, solverData.m_pnGlobal);
-
-      sliceWriteTime += std::chrono::duration<double>(
-          std::chrono::steady_clock::now() - startSlice
-      ).count();
-
+      sliceBytes += saveSlice(indexTimeSample, solverData.m_pnGlobal,
+                              sliceExtractTime, sliceWriteTime);
       sliceCount++;
     }
 
@@ -281,7 +276,7 @@ void SEMproxy::run()
       std::chrono::duration<double>(totalComputeTime.time_since_epoch())
           .count(),
       snapshotWriteTime, snapshotCount, snapshotBytes, seismoWriteTime,
-      seismoBytes, sliceWriteTime, sliceCount, sliceBytes);
+      seismoBytes, sliceWriteTime, sliceCount, sliceBytes, sliceExtractTime);
 }
 
 // Écrit un snapshot : un fichier CSV avec la pression de tous les noeuds
@@ -304,42 +299,55 @@ std::size_t SEMproxy::saveSnapshot(int timestep, const arrayReal& field)
   return static_cast<std::size_t>(file.tellp());  // octets écrits
 }
 
-
-// Écrit une slice : un fichier CSV avec la pression des noeuds du plan
-std::size_t SEMproxy::saveSlice(int timestep, const arrayReal& field)
+// Écrit une slice : un fichier CSV avec la pression des noeuds du plan.
+// Deux phases chronométrées séparément : extraction puis écriture.
+std::size_t SEMproxy::saveSlice(int timestep, const arrayReal& field,
+                                double& extractTime, double& writeTime)
 {
-  // 1. Nom du fichier : slices/slice_000150.csv
-  std::ostringstream name;
-  name << slice_folder_ << "/slice_" << std::setw(6) << std::setfill('0')
-       << timestep << ".csv";
+  // ===== Phase 1 : extraction (traitement in-situ) =====
+#ifdef USE_KOKKOS
+  Kokkos::fence();  // attendre que le calcul soit vraiment fini
+#endif
+  auto t0 = std::chrono::steady_clock::now();
 
-  // 2. Ouvrir le fichier
-  std::ofstream file(name.str());
-  if (!file) throw std::runtime_error("Cannot open " + name.str());
-
-  // 3. Quelle coordonnée tester ? 0 = x, 1 = y, 2 = z
-  int axis = 2;
+  int axis = 2;                       // 0 = x, 1 = y, 2 = z
   if (slice_axis_ == "x") axis = 0;
   if (slice_axis_ == "y") axis = 1;
+  const float tol = 1e-3f;            // tolérance : 1 mm
 
-  // 4. Tolérance : on accepte un écart de 1 mm
-  const float tol = 1e-3f;
+  struct Point { double x, y, z, p; };  // un point de la slice
+  std::vector<Point> points;            // la liste des points mis de côté
 
-  // 5. Écrire seulement les noeuds qui sont sur le plan
-  file << "x,y,z,pressure\n";
   const int nbNodes = m_mesh->getNumberOfNodes();
   for (int n = 0; n < nbNodes; n++)
   {
-    if (std::abs(m_mesh->nodeCoord(n, axis) - slice_pos_) > tol) continue;
-
-    file << m_mesh->nodeCoord(n, 0) << ',' << m_mesh->nodeCoord(n, 1) << ','
-         << m_mesh->nodeCoord(n, 2) << ',' << field(n, i1) << '\n';
+    if (std::abs(m_mesh->nodeCoord(n, axis) - slice_pos_) <= tol)
+      points.push_back({m_mesh->nodeCoord(n, 0), m_mesh->nodeCoord(n, 1),
+                        m_mesh->nodeCoord(n, 2), field(n, i1)});
   }
 
-  // 6. Renvoyer le nombre d'octets écrits
-  return static_cast<std::size_t>(file.tellp());
-}
+  auto t1 = std::chrono::steady_clock::now();
+  extractTime += std::chrono::duration<double>(t1 - t0).count();
 
+  // ===== Phase 2 : écriture =====
+  std::ostringstream name;
+  name << slice_folder_ << "/slice_" << std::setw(6) << std::setfill('0')
+       << timestep << ".csv";
+  std::ofstream file(name.str());
+  if (!file) throw std::runtime_error("Cannot open " + name.str());
+
+  file << "x,y,z,pressure\n";
+  for (const Point& pt : points)
+    file << pt.x << ',' << pt.y << ',' << pt.z << ',' << pt.p << '\n';
+
+  const std::size_t bytes = static_cast<std::size_t>(file.tellp());
+  file.close();
+
+  auto t2 = std::chrono::steady_clock::now();
+  writeTime += std::chrono::duration<double>(t2 - t1).count();
+
+  return bytes;
+}
 
 // Ajoute une ligne dans le fichier de métriques (crée l'en-tête si besoin)
 void SEMproxy::writeMetrics(double computeTime, double snapshotWriteTime,
@@ -347,7 +355,7 @@ void SEMproxy::writeMetrics(double computeTime, double snapshotWriteTime,
                             double seismoWriteTime,
                             std::size_t seismoBytes,
                             double sliceWriteTime, int sliceCount,
-                            std::size_t sliceBytes) const
+                            std::size_t sliceBytes, double sliceExtractTime) const
 {
   if (opt_.metrics_file.empty()) return;
 
@@ -372,7 +380,7 @@ void SEMproxy::writeMetrics(double computeTime, double snapshotWriteTime,
             "snapshot_count,snapshot_bytes,max_rss_kb,nb_receivers,"
             "seismo_write_time_s,seismo_bytes,"
             "slices,slice_axis,slice_pos,slice_write_time_s,"
-            "slice_count,slice_bytes\n";
+            "slice_count,slice_bytes,slice_extract_time_s\n";
   }
   file << std::setprecision(9) << opt_.ex << ',' << opt_.ey << ',' << opt_.ez
        << ',' << opt_.order << ',' << m_mesh->getNumberOfNodes() << ','
@@ -384,7 +392,7 @@ void SEMproxy::writeMetrics(double computeTime, double snapshotWriteTime,
        << seismoWriteTime << ',' << seismoBytes << ','
        << (is_slices_ ? 1 : 0) << ',' << slice_axis_ << ',' << slice_pos_
        << ',' << sliceWriteTime << ',' << sliceCount << ',' << sliceBytes
-       << '\n';
+       << ',' << sliceExtractTime << '\n';
 }
 
 // Initialize arrays
