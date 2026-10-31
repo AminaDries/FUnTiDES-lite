@@ -37,6 +37,7 @@ import statistics
 import subprocess
 import sys
 import time
+from matplotlib.ticker import NullFormatter
 
 # Récepteurs placés dans le domaine par défaut (2000 m), près de la source (1000, 1000, 1000)
 RECEIVERS = "1200,1000,1000\n1500,1000,1000\n1000,1600,1000\n"
@@ -320,6 +321,9 @@ def tracer(lignes, tailles, dossier):
         b.set_xscale("log")
         b.legend()
         b.grid(alpha=0.3)
+        b.set_xticks(elements)
+        b.set_xticklabels([f"{ex}³" for ex in tailles])
+        b.xaxis.set_minor_formatter(NullFormatter())
     b1.set_yscale("log")
     b2.set_yscale("log")
     fig.tight_layout()
