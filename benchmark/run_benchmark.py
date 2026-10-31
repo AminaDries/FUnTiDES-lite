@@ -290,6 +290,43 @@ def tracer(lignes, tailles, dossier):
     fig.savefig(chemin, dpi=150)
     print("Graphique écrit :", chemin)
 
+    # ----- Figure 2 : snapshots vs slices -----
+    fig, (b1, b2, b3) = plt.subplots(1, 3, figsize=(14, 4))
+    cas = [
+        # (mode, colonne taille, colonne écriture, nom de la courbe)
+        ("avec", "snapshot_bytes", "snapshot_write_time_s", "snapshots"),
+        ("slices", "slice_bytes", "slice_write_time_s", "slices"),
+    ]
+    for mode, col_taille, col_ecriture, nom in cas:
+        tailles_mo = [med(lignes, col_taille, ex=ex, threads=th, mode=mode) / 1e6
+                      for ex in tailles]
+        ecritures = [med(lignes, col_ecriture, ex=ex, threads=th, mode=mode)
+                     for ex in tailles]
+        totaux = [med(lignes, "wall_s", ex=ex, threads=th, mode=mode)
+                  + med(lignes, "viz_snapshot_s", ex=ex, threads=th, mode=mode)
+                  for ex in tailles]
+        b1.plot(elements, tailles_mo, "o-", label=nom)
+        b2.plot(elements, ecritures, "o-", label=nom)
+        b3.plot(elements, totaux, "o-", label=nom)
+
+    b1.set_title("Volume écrit sur disque")
+    b1.set_ylabel("taille (Mo)")
+    b2.set_title("Temps d'écriture pendant la simulation")
+    b2.set_ylabel("temps (s)")
+    b3.set_title("Workflow total (simulation + image)")
+    b3.set_ylabel("temps (s)")
+    for b in (b1, b2, b3):
+        b.set_xlabel("nombre d'éléments")
+        b.set_xscale("log")
+        b.legend()
+        b.grid(alpha=0.3)
+    b1.set_yscale("log")
+    b2.set_yscale("log")
+    fig.tight_layout()
+    chemin = os.path.join(dossier, "benchmark_slices.png")
+    fig.savefig(chemin, dpi=150)
+    print("Graphique écrit :", chemin)    
+
     if len(threads_vus) > 1:
         ref = threads_vus[0]
         fig, ax = plt.subplots(figsize=(5, 4))
