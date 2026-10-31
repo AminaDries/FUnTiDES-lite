@@ -42,6 +42,7 @@ class SemProxyOptions
   bool insitu_stats = false;                      
   int insitu_interval = 1;                        
   std::string insitu_file = "insitu_stats.csv";
+  std::string insitu_mode = "device";
   
 
   void validate() const
@@ -55,6 +56,8 @@ class SemProxyOptions
       throw std::runtime_error("snap-interval must be > 0");
     if (insitu_interval <= 0)                                          // NOUVEAU
       throw std::runtime_error("insitu-interval must be > 0"); 
+        if (insitu_mode != "device" && insitu_mode != "host")
+      throw std::runtime_error("insitu-mode must be device or host");
     }
 
   // Bind CLI flags to this instance (no --help here)
@@ -111,6 +114,8 @@ class SemProxyOptions
         "insitu-interval", "Number of time steps between two in-situ analyses",
         cxxopts::value<int>(o.insitu_interval))(
         "insitu-file", "CSV file where in-situ statistics are written",
-        cxxopts::value<std::string>(o.insitu_file));
+        cxxopts::value<std::string>(o.insitu_file))(
+        "insitu-mode", "Where to compute in-situ stats: device|host",
+        cxxopts::value<std::string>(o.insitu_mode));
       }
 };

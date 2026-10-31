@@ -225,7 +225,9 @@ void SEMproxy::run()
     if (opt_.insitu_stats && indexTimeSample % opt_.insitu_interval == 0)
     {
       const auto startInsitu = std::chrono::steady_clock::now();
-      const RunningStats s = computeStatsHost(solverData.m_pnGlobal);
+            const RunningStats s =
+          (opt_.insitu_mode == "host") ? computeStatsHost(solverData.m_pnGlobal)
+                                       : computeStatsDevice(solverData.m_pnGlobal);
       const double sec = std::chrono::duration<double>(
                              std::chrono::steady_clock::now() - startInsitu)
                              .count();
@@ -246,8 +248,15 @@ void SEMproxy::run()
   {
     writeInsituStats(insituRecords);
     std::cout << "---- In-situ analysis time : " << insituTime << " seconds ("
-              << insituRecords.size() << " analyses)." << std::endl;
-  }
+              << insituRecords.size() << " analyses, mode " << opt_.insitu_mode
+              << ")." << std::endl;
+    const std::size_t bytesPerAnalysis =
+        (opt_.insitu_mode == "host")
+            ? static_cast<std::size_t>(m_mesh->getNumberOfNodes()) * sizeof(float)
+            : sizeof(RunningStats);
+    std::cout << "---- Data moved to host    : " << bytesPerAnalysis
+              << " bytes per analysis." << std::endl;
+    }
 
   const auto startSeismo = std::chrono::steady_clock::now();
   saveSeismos();
@@ -311,7 +320,20 @@ RunningStats SEMproxy::computeStatsHost(const arrayReal& field) const
   {
     stats.add(field(n, i1));
   }
+
   return stats;
+}
+
+RunningStats SEMproxy::computeStatsDevice(const arrayReal& field) const
+{
+#ifdef USE_KOKKOS
+  RunningStats result;
+  Kokkos::parallel_reduce("insitu_stats", m_mesh->getNumberOfNodes(),
+                          RunningStatsReducer<arrayReal>{field, i1}, result);
+  return result;
+#else
+  return computeStatsHost(field); 
+#endif
 }
 
 // Ecrit les resultats in-situ (une ligne par analyse). Memes colonnes que l'ad-hoc.
