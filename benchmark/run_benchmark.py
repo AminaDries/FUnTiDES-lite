@@ -47,6 +47,7 @@ COLONNES_NOMBRES = [
     "nb_steps", "threads", "snapshots", "snap_interval", "compute_time_s",
     "snapshot_write_time_s", "snapshot_count", "snapshot_bytes", "max_rss_kb",
     "nb_receivers", "seismo_write_time_s", "seismo_bytes",
+    "slices", "slice_pos", "slice_write_time_s", "slice_count", "slice_bytes",
 ]
 
 # Colonnes écrites dans benchmark.csv
@@ -55,6 +56,7 @@ COLONNES_SORTIE = [
     "compute_time_s", "snapshot_write_time_s", "seismo_write_time_s",
     "snapshot_count", "snapshot_bytes", "seismo_bytes", "max_rss_kb",
     "nb_nodes", "nb_steps", "viz_snapshot_s", "viz_sismos_s", "viz_s",
+    "slice_write_time_s", "slice_count", "slice_bytes",
 ]
 
 
@@ -92,6 +94,10 @@ def mesurer_visu(viz_dir, dossier_run, mode):
     if mode == "avec":
         t_snap = chronometrer([sys.executable, os.path.join(viz_dir, "plot_snapshot.py"),
                         os.path.join(dossier_run, "snapshots")], env)
+    if mode == "slices":
+        t_snap = chronometrer([sys.executable, os.path.join(viz_dir, "plot_snapshot.py"),
+                        os.path.join(dossier_run, "slices")], env)
+        
     t_sis = chronometrer([sys.executable, os.path.join(viz_dir, "plot_sismos.py"),
                           dossier_run], env)
     if t_snap is None or t_sis is None:
@@ -112,6 +118,11 @@ def lancer(exe, ex, threads, mode, run, args, dossier_run, fichier_rcv):
     if mode == "avec":
         cmd += ["--snapshots", "--snap-interval", str(args.snap_interval),
                 "--snap-folder", snap]
+        
+    if mode == "slices":
+        cmd += ["--slices", "--snap-interval", str(args.snap_interval),
+                "--slice-pos", "1000",
+                "--slice-folder", os.path.join(dossier_run, "slices")]
     env = os.environ.copy()
     if threads:
         env["OMP_NUM_THREADS"] = str(threads)
@@ -292,16 +303,16 @@ def main():
 
     liste_threads = args.threads or [None]
     lignes = []
-    total_runs = len(args.sizes) * len(liste_threads) * 2 * args.repeats
+    total_runs = len(args.sizes) * len(liste_threads) * 3 * args.repeats
     n = 0
     dossier_run = os.path.join(out, "run_tmp")
     for ex in args.sizes:
         for th in liste_threads:
-            for mode in ("sans", "avec"):
+            for mode in ("sans", "avec", "slices"):
                 for run in range(1, args.repeats + 1):
                     n += 1
                     print(f"[{n}/{total_runs}] maillage {ex}³, threads={th or 'défaut'}, "
-                          f"{mode} snapshots, essai {run}", flush=True)
+                          f"mode {mode}, essai {run}", flush=True)
                     lignes.append(lancer(exe, ex, th, mode, run, args, dossier_run, fichier_rcv))
     shutil.rmtree(dossier_run, ignore_errors=True)
 
