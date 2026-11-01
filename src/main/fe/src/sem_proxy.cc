@@ -25,6 +25,8 @@
 #include <fstream>
 
 #include <sys/resource.h>
+#include <fcntl.h>
+#include <unistd.h>
 
 using namespace SourceAndReceiverUtils;
 
@@ -155,6 +157,16 @@ SEMproxy::SEMproxy(const SemProxyOptions& opt)
   std::cout << "Simulated time is " << timemax_ << "s" << std::endl;
 }
 
+static void syncFile(const std::string& path)
+{
+  const int fd = ::open(path.c_str(), O_RDONLY);
+  if (fd >= 0)
+  {
+    ::fsync(fd);
+    ::close(fd);
+  }
+}
+
 void SEMproxy::run()
 {
   time_point<system_clock> startComputeTime, startOutputTime, totalComputeTime,
@@ -165,6 +177,8 @@ void SEMproxy::run()
 
     std::vector<InsituRecord> insituRecords; 
   double insituTime = 0.0;
+  double insituVelTime = 0.0;
+  double insituHistTime = 0.0;
   std::vector<int> histSteps;
   std::vector<std::vector<std::size_t>> histRows;
   const std::size_t velNodes =
@@ -238,6 +252,7 @@ void SEMproxy::run()
       snapshotCount++;
   }
   
+    const auto tVel0 = std::chrono::steady_clock::now();
     if (opt_.insitu_vel && indexTimeSample % opt_.insitu_interval == 0)
     {
 #ifdef USE_KOKKOS
@@ -255,6 +270,11 @@ void SEMproxy::run()
       }
     }
 
+    insituVelTime += std::chrono::duration<double>(
+                         std::chrono::steady_clock::now() - tVel0)
+                         .count();
+    const auto tHist0 = std::chrono::steady_clock::now();
+
     if (opt_.insitu_hist && indexTimeSample % opt_.insitu_interval == 0)
     {
 #ifdef USE_KOKKOS
@@ -269,6 +289,10 @@ void SEMproxy::run()
       histSteps.push_back(indexTimeSample);
       histRows.push_back(h.counts);
     }
+
+    insituHistTime += std::chrono::duration<double>(
+                          std::chrono::steady_clock::now() - tHist0)
+                          .count();
 
     if (opt_.insitu_stats && indexTimeSample % opt_.insitu_interval == 0)
     {
@@ -292,6 +316,7 @@ void SEMproxy::run()
     totalOutputTime += system_clock::now() - startOutputTime;
   }
   
+  const auto tWrite0 = std::chrono::steady_clock::now();
   if (opt_.insitu_vel)
   {
     std::ofstream vf(opt_.insitu_vel_file);
@@ -341,6 +366,19 @@ void SEMproxy::run()
     std::cout << "---- Data moved to host    : " << bytesPerAnalysis
               << " bytes per analysis." << std::endl;
     }
+
+  if (opt_.fsync_snapshots)
+  {
+    if (opt_.insitu_vel) syncFile(opt_.insitu_vel_file);
+    if (opt_.insitu_hist) syncFile(opt_.insitu_hist_file);
+    if (opt_.insitu_stats) syncFile(opt_.insitu_file);
+  }
+  insitu_write_s_ = std::chrono::duration<double>(
+                        std::chrono::steady_clock::now() - tWrite0)
+                        .count();
+  insitu_stats_s_ = insituTime;
+  insitu_hist_s_ = insituHistTime;
+  insitu_vel_s_ = insituVelTime;
 
   if (opt_.insitu_sismos)
   {
@@ -432,7 +470,22 @@ std::size_t SEMproxy::saveSnapshot(int timestep, const arrayReal& field)
     file << m_mesh->nodeCoord(n, 0) << ',' << m_mesh->nodeCoord(n, 1) << ','
          << m_mesh->nodeCoord(n, 2) << ',' << field(n, i1) << '\n';
   }
-  return static_cast<std::size_t>(file.tellp());  // octets écrits
+  const std::size_t bytes = static_cast<std::size_t>(file.tellp());
+  if (opt_.fsync_snapshots)
+  {
+    file.close();  // vide le tampon du programme vers le noyau
+    const auto t0 = std::chrono::steady_clock::now();
+    const int fd = ::open(name.str().c_str(), O_RDONLY);
+    if (fd >= 0)
+    {
+      ::fsync(fd);  // force l'ecriture reelle sur le disque
+      ::close(fd);
+    }
+    snapshotSyncTime_ += std::chrono::duration<double>(
+                             std::chrono::steady_clock::now() - t0)
+                             .count();
+  }
+  return bytes;  // octets écrits
 }
 
 // Statistiques en flux du champ de pression, calculees sur l'hote (CPU).
@@ -504,7 +557,9 @@ void SEMproxy::writeMetrics(double computeTime, double snapshotWriteTime,
             "snapshots,snap_interval,compute_time_s,snapshot_write_time_s,"
             "snapshot_count,snapshot_bytes,max_rss_kb,nb_receivers,"
             "seismo_write_time_s,seismo_bytes,"
-            "insitu_sismos,insitu_sismos_loop_s,insitu_sismos_final_s\n";
+            "insitu_sismos,insitu_sismos_loop_s,insitu_sismos_final_s,"
+            "fsync,snapshot_sync_time_s,insitu_stats_s,insitu_hist_s,"
+            "insitu_vel_s,insitu_write_s\n";
   }
   file << std::setprecision(9) << opt_.ex << ',' << opt_.ey << ',' << opt_.ez
        << ',' << opt_.order << ',' << m_mesh->getNumberOfNodes() << ','
@@ -515,7 +570,10 @@ void SEMproxy::writeMetrics(double computeTime, double snapshotWriteTime,
        << ',' << usage.ru_maxrss << ',' << nb_receivers_ << ','
        << seismoWriteTime << ',' << seismoBytes << ','
        << (opt_.insitu_sismos ? 1 : 0) << ',' << insitu_sismos_loop_s_ << ','
-       << insitu_sismos_final_s_ << '\n';
+       << insitu_sismos_final_s_ << ',' << (opt_.fsync_snapshots ? 1 : 0)
+       << ',' << snapshotSyncTime_ << ',' << insitu_stats_s_ << ','
+       << insitu_hist_s_ << ',' << insitu_vel_s_ << ',' << insitu_write_s_
+       << '\n';
 }
 
 // Initialize arrays

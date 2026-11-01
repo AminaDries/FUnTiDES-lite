@@ -106,6 +106,7 @@ class SEMproxy
   private:
   int i1 = 0;
   int i2 = 1;
+  double snapshotSyncTime_ = 0.0;  // secondes passees dans fsync (snapshots)
 
   // proper to cartesian mesh
   // or any structured mesh
@@ -117,6 +118,10 @@ class SEMproxy
   int nb_receivers_ = 1;
   double insitu_sismos_loop_s_ = 0.0;   // temps in-situ sismos dans la boucle
   double insitu_sismos_final_s_ = 0.0;  // temps in-situ sismos en fin de simulation
+  double insitu_stats_s_ = 0.0;  // temps in-situ stats (boucle)
+  double insitu_hist_s_ = 0.0;   // temps in-situ histogramme (boucle)
+  double insitu_vel_s_ = 0.0;    // temps in-situ pics par noeud (boucle)
+  double insitu_write_s_ = 0.0;  // ecriture (+ fsync) des fichiers in-situ
   std::string seismo_dir_;
 
   SemProxyOptions opt_;

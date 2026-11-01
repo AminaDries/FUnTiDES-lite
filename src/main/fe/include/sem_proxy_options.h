@@ -47,6 +47,7 @@ class SemProxyOptions
   std::string insitu_hist_file = "insitu_hist.csv";
   bool insitu_vel = false;
   std::string insitu_vel_file = "insitu_vel.csv";
+  bool fsync_snapshots = false;
   bool insitu_sismos = false;                          // stats des sismos en flux ?
   std::string insitu_sismos_file = "insitu_sismos.csv"; // fichier de sortie
   
@@ -138,6 +139,8 @@ class SemProxyOptions
         cxxopts::value<bool>(o.insitu_vel))(
         "insitu-vel-file", "CSV file where per-node peaks are written",
         cxxopts::value<std::string>(o.insitu_vel_file))(
+        "fsync", "fsync each output file (snapshots and in-situ results)",
+        cxxopts::value<bool>(o.fsync_snapshots))(
         "insitu-sismos", "Compute seismogram statistics in-situ (streaming)",
         cxxopts::value<bool>(o.insitu_sismos))(
         "insitu-sismos-file", "CSV file where in-situ seismogram stats are written",
