@@ -27,12 +27,16 @@ REPEATS="${REPEATS:-5}"          # annexe, section 5 : au moins 5
 OUT="benchmark/results/campagne_gpu_$(date +%Y%m%d_%H%M)"
 
 # noms des configurations pour bench_adhoc_insitu.py : "S=50 M=100 L=200"
-NOMS=(S M L)
+# (le nom depend de la taille, pas de l'ordre : SIZES="200" donne bien "L=200")
 CONFIGS=""
-i=0
 for N in $SIZES; do
-  CONFIGS="$CONFIGS ${NOMS[$i]:-C$i}=$N"
-  i=$((i + 1))
+  case $N in
+    50) NOM=S ;;
+    100) NOM=M ;;
+    200) NOM=L ;;
+    *) NOM="N$N" ;;
+  esac
+  CONFIGS="$CONFIGS $NOM=$N"
 done
 
 echo "=== 1. Verifications ==="

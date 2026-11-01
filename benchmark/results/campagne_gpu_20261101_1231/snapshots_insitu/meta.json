@@ -1,0 +1,31 @@
+{
+  "date": "2026-11-01 13:12:38",
+  "machine": "benachour-souhila-LOQ-15IRX10",
+  "noyau": "7.0.0-38-generic",
+  "cpu": "inconnu",
+  "nproc": 20,
+  "omp_num_threads": 20,
+  "memoire": "31Gi",
+  "gpu": "NVIDIA GeForce RTX 5050 Laptop GPU, 8151 MiB, 595.99.02",
+  "systeme_fichiers": "/dev/mapper/ubuntu--vg-ubuntu--lv ext4   980211368 233102468  697243172  26% /",
+  "commit": "4b4d19bb37b0789cc5d706735cea9fb58445ab9d",
+  "modifications_non_commitees": true,
+  "configs": [
+    "S=200"
+  ],
+  "repetitions": 5,
+  "timemax": 1.5,
+  "snap_interval": 50,
+  "insitu_interval": 50,
+  "hist_bound": 2.23736,
+  "executable": "/home/benachour-souhila/Documents/m2/FUnTiDES-lite/build-release/bin/semproxy",
+  "options_compilation": {
+    "CMAKE_BUILD_TYPE": "Release",
+    "CMAKE_CXX_FLAGS": "",
+    "CMAKE_CXX_FLAGS_RELEASE": "-O3 -DNDEBUG -march=native -mtune=native",
+    "Kokkos_ARCH_BLACKWELL120": "ON",
+    "Kokkos_ENABLE_CUDA": "ON",
+    "Kokkos_ENABLE_OPENMP": "ON",
+    "Kokkos_ENABLE_SERIAL": "ON"
+  }
+}

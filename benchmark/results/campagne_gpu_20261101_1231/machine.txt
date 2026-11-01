@@ -1,0 +1,17 @@
+date : 2026-11-01 12:31
+commit : 4b4d19bb37b0789cc5d706735cea9fb58445ab9d (branche integration)
+reglages locaux non commites : CompilerConfig.cmake + sous-module Kokkos
+kokkos : post-formating-12062-gb8c48cc9c
+CPU : 13th Gen Intel(R) Core(TM) i7-13650HX
+GPU : NVIDIA GeForce RTX 5050 Laptop GPU, 8151 MiB, 595.99.02
+CUDA : 13.4, V13.4.92
+RAM : 31Gi
+OS : Ubuntu 24.04.5 LTS
+systeme de fichiers : /dev/mapper/ubuntu--vg-ubuntu--lv ext4
+compilation :
+  CMAKE_BUILD_TYPE:STRING=Release
+  ENABLE_CUDA:BOOL=ON
+  Kokkos_ARCH_BLACKWELL120:BOOL=ON
+  Kokkos_ENABLE_CUDA_UVM:BOOL=ON
+  USE_KOKKOS:BOOL=ON
+tailles : 200, repetitions : 5 (+ 1 chauffe par taille, non comptee)
