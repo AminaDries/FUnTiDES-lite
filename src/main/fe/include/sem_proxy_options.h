@@ -35,6 +35,12 @@ class SemProxyOptions
   int snap_interval = 20;                 
   std::string snap_folder = "snapshots";     
 
+  // slices
+  bool slices = false;                    // faut-il sauvegarder des slices?
+  std::string slice_axis = "z";                  // dans quelle diretion on coupe
+  float slice_pos = 1000.f;               // à quelle hauteur on coupe (en mètres)
+  std::string slice_folder = "slices";    // dossier où on range les fichiers
+  
   std::string metrics_file = "";
 
   bool insitu_stats = false;                      
@@ -68,7 +74,9 @@ class SemProxyOptions
       throw std::runtime_error("insitu-hist-bins must be > 0");
     if (insitu_hist_bound <= 0.0)
       throw std::runtime_error("insitu-hist-bound must be > 0");
-    }
+    if (slice_axis != "x" && slice_axis != "y" && slice_axis != "z")
+      throw std::runtime_error("slice-axis must be x, y or z");
+  }
 
   static void bind_cli(cxxopts::Options& opts, SemProxyOptions& o)
   {
@@ -116,6 +124,14 @@ class SemProxyOptions
         "snap-folder", "Folder where snapshots are written",
         // cxxopts::value<std::string>(o.snap_folder));
         cxxopts::value<std::string>(o.snap_folder))(
+        "slices", "Save a 2D slice of the wave field (CSV)",
+        cxxopts::value<bool>(o.slices))(
+        "slice-axis", "Axis perpendicular to the slice: x|y|z",
+        cxxopts::value<std::string>(o.slice_axis))(
+        "slice-pos", "Position of the slice plane (meters)",
+        cxxopts::value<float>(o.slice_pos))(
+        "slice-folder", "Folder where slices are written",
+        cxxopts::value<std::string>(o.slice_folder))(
         "metrics-file", "CSV file where run metrics are appended",
         cxxopts::value<std::string>(o.metrics_file))(
         "insitu-stats", "Compute statistics in-situ (during the run)",

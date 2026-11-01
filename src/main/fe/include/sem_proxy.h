@@ -91,10 +91,15 @@ class SEMproxy
   // :: void saveSnapshot(int timestep, const arrayReal& field);
   
   std::size_t saveSnapshot(int timestep, const arrayReal& field);  
-
+  std::size_t saveSlice(int timestep, const arrayReal& field,
+                        double& extractTime, double& writeTime,
+                        double& fsyncTime);
   void writeMetrics(double computeTime, double snapshotWriteTime,
                     int snapshotCount, std::size_t snapshotBytes,
-                    double seismoWriteTime, std::size_t seismoBytes) const;
+                    double seismoWriteTime, std::size_t seismoBytes,
+                    double sliceWriteTime, int sliceCount,
+                    std::size_t sliceBytes, double sliceExtractTime,
+                    double sliceFsyncTime) const;
       RunningStats computeStatsHost(const arrayReal& field) const;
       RunningStats computeStatsDevice(const arrayReal& field) const;
       void writeInsituStats(const std::vector<InsituRecord>& records) const;
@@ -126,6 +131,12 @@ class SEMproxy
   bool is_snapshots_;
   int snap_time_interval_;
   std::string snap_folder_;
+
+  // slices
+  bool is_slices_;
+  std::string slice_axis_;
+  float slice_pos_;
+  std::string slice_folder_;
 
   // physics
   bool isElastic_;

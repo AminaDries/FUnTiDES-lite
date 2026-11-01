@@ -28,6 +28,9 @@
 #include <sys/resource.h>
 #include <unistd.h>  // fsync, close
 
+#include <fcntl.h>    
+#include <unistd.h>   
+
 using namespace SourceAndReceiverUtils;
 
 SEMproxy::SEMproxy(const SemProxyOptions& opt)
@@ -63,6 +66,14 @@ SEMproxy::SEMproxy(const SemProxyOptions& opt)
   snap_time_interval_ = opt.snap_interval;
   snap_folder_ = opt.snap_folder;
   if (is_snapshots_) std::filesystem::create_directories(snap_folder_);
+
+
+  // slices
+  is_slices_ = opt.slices;
+  slice_axis_ = opt.slice_axis;
+  slice_pos_ = opt.slice_pos;
+  slice_folder_ = opt.slice_folder;
+  if (is_slices_) std::filesystem::create_directories(slice_folder_);
 
   isElastic_ = opt.isElastic;
   cout << boolalpha;
@@ -178,6 +189,12 @@ void SEMproxy::run()
   std::vector<SeismoStream> seismoStreams(opt_.insitu_sismos ? nb_receivers_ : 0);
   double insituSismosTime = 0.0;                   
 
+  double sliceWriteTime = 0.0;     // secondes passées à écrire les slices
+  int sliceCount = 0;              // nombre de slices écrites
+  std::size_t sliceBytes = 0;      // octets écrits au total (slices)
+  double sliceExtractTime = 0.0;   // secondes passées à extraire les slices
+  double sliceFsyncTime = 0.0;     // secondes passées dans fsync (slices)
+
   SEMsolverDataAcoustic solverData(i1, i2, myRHSTerm, pnGlobal, rhsElement,
                                    rhsWeights);
 
@@ -285,6 +302,15 @@ void SEMproxy::run()
       insituRecords.push_back(
           {indexTimeSample, static_cast<double>(indexTimeSample) * dt_, s, sec});
     }
+  
+    // Slice du champ d'onde (mêmes pas de temps que les snapshots)
+    if (is_slices_ && indexTimeSample % snap_time_interval_ == 0)
+    {
+      sliceBytes += saveSlice(indexTimeSample, solverData.m_pnGlobal,
+                              sliceExtractTime, sliceWriteTime, sliceFsyncTime);
+      sliceCount++;
+    }
+
     swap(i1, i2);
 
     auto tmp = solverData.m_i1;
@@ -433,7 +459,8 @@ void SEMproxy::run()
       std::chrono::duration<double>(totalComputeTime.time_since_epoch())
           .count(),
       snapshotWriteTime, snapshotCount, snapshotBytes, seismoWriteTime,
-      seismoBytes);
+      seismoBytes, sliceWriteTime, sliceCount, sliceBytes, sliceExtractTime,
+      sliceFsyncTime);
 }
 
 // Écrit un snapshot : un fichier CSV avec la pression de tous les noeuds
@@ -499,10 +526,75 @@ void SEMproxy::writeInsituStats(const std::vector<InsituRecord>& records) const
   }
 }
 
+// Écrit une slice : un fichier CSV avec la pression des noeuds du plan.
+// Deux phases chronométrées séparément : extraction puis écriture.
+std::size_t SEMproxy::saveSlice(int timestep, const arrayReal& field,
+                                double& extractTime, double& writeTime,
+                                double& fsyncTime)
+{
+  // ===== Phase 1 : extraction (traitement in-situ) =====
+#ifdef USE_KOKKOS
+  Kokkos::fence();  // attendre que le calcul soit vraiment fini
+#endif
+  auto t0 = std::chrono::steady_clock::now();
+
+  int axis = 2;                       // 0 = x, 1 = y, 2 = z
+  if (slice_axis_ == "x") axis = 0;
+  if (slice_axis_ == "y") axis = 1;
+  const float tol = 1e-3f;            // tolérance : 1 mm
+
+  struct Point { double x, y, z, p; };  // un point de la slice
+  std::vector<Point> points;            // la liste des points mis de côté
+
+  const int nbNodes = m_mesh->getNumberOfNodes();
+  for (int n = 0; n < nbNodes; n++)
+  {
+    if (std::abs(m_mesh->nodeCoord(n, axis) - slice_pos_) <= tol)
+      points.push_back({m_mesh->nodeCoord(n, 0), m_mesh->nodeCoord(n, 1),
+                        m_mesh->nodeCoord(n, 2), field(n, i1)});
+  }
+
+  auto t1 = std::chrono::steady_clock::now();
+  extractTime += std::chrono::duration<double>(t1 - t0).count();
+
+  // ===== Phase 2 : écriture =====
+  std::ostringstream name;
+  name << slice_folder_ << "/slice_" << std::setw(6) << std::setfill('0')
+       << timestep << ".csv";
+  std::ofstream file(name.str());
+  if (!file) throw std::runtime_error("Cannot open " + name.str());
+
+  file << "x,y,z,pressure\n";
+  for (const Point& pt : points)
+    file << pt.x << ',' << pt.y << ',' << pt.z << ',' << pt.p << '\n';
+
+  const std::size_t bytes = static_cast<std::size_t>(file.tellp());
+  file.close();
+
+  auto t2 = std::chrono::steady_clock::now();
+  writeTime += std::chrono::duration<double>(t2 - t1).count();
+
+  // ===== Phase 3 : fsync (forcer l'écriture réelle sur le disque) =====
+  int fd = ::open(name.str().c_str(), O_WRONLY);
+  if (fd >= 0)
+  {
+    ::fsync(fd);
+    ::close(fd);
+  }
+  auto t3 = std::chrono::steady_clock::now();
+  fsyncTime += std::chrono::duration<double>(t3 - t2).count();
+
+  return bytes;
+}
+
+// Ajoute une ligne dans le fichier de métriques (crée l'en-tête si besoin)
 void SEMproxy::writeMetrics(double computeTime, double snapshotWriteTime,
                             int snapshotCount, std::size_t snapshotBytes,
                             double seismoWriteTime,
-                            std::size_t seismoBytes) const
+                            std::size_t seismoBytes,
+                            double sliceWriteTime, int sliceCount,
+                            std::size_t sliceBytes, double sliceExtractTime,
+                            double sliceFsyncTime) const
 {
   if (opt_.metrics_file.empty()) return;
 
@@ -526,7 +618,9 @@ void SEMproxy::writeMetrics(double computeTime, double snapshotWriteTime,
             "snapshot_count,snapshot_bytes,max_rss_kb,nb_receivers,"
             "seismo_write_time_s,seismo_bytes,"
             "insitu_sismos,insitu_sismos_loop_s,insitu_sismos_final_s,"
-            "seismo_fsync_time_s\n";
+            "seismo_fsync_time_s,"
+            "slices,slice_axis,slice_pos,slice_write_time_s,"
+            "slice_count,slice_bytes,slice_extract_time_s,slice_fsync_time_s\n";
   }
   file << std::setprecision(9) << opt_.ex << ',' << opt_.ey << ',' << opt_.ez
        << ',' << opt_.order << ',' << m_mesh->getNumberOfNodes() << ','
@@ -537,7 +631,10 @@ void SEMproxy::writeMetrics(double computeTime, double snapshotWriteTime,
        << ',' << usage.ru_maxrss << ',' << nb_receivers_ << ','
        << seismoWriteTime << ',' << seismoBytes << ','
        << (opt_.insitu_sismos ? 1 : 0) << ',' << insitu_sismos_loop_s_ << ','
-       << insitu_sismos_final_s_ << ',' << seismo_fsync_s_ << '\n';
+       << insitu_sismos_final_s_ << ',' << seismo_fsync_s_ << ','
+       << (is_slices_ ? 1 : 0) << ',' << slice_axis_ << ',' << slice_pos_
+       << ',' << sliceWriteTime << ',' << sliceCount << ',' << sliceBytes
+       << ',' << sliceExtractTime << ',' << sliceFsyncTime << '\n';
 }
 
 // Initialize arrays

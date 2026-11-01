@@ -37,6 +37,7 @@ import statistics
 import subprocess
 import sys
 import time
+from matplotlib.ticker import NullFormatter
 
 # Récepteurs placés dans le domaine par défaut (2000 m), près de la source (1000, 1000, 1000)
 RECEIVERS = "1200,1000,1000\n1500,1000,1000\n1000,1600,1000\n"
@@ -47,6 +48,8 @@ COLONNES_NOMBRES = [
     "nb_steps", "threads", "snapshots", "snap_interval", "compute_time_s",
     "snapshot_write_time_s", "snapshot_count", "snapshot_bytes", "max_rss_kb",
     "nb_receivers", "seismo_write_time_s", "seismo_bytes",
+    "slices", "slice_pos", "slice_write_time_s", "slice_count", "slice_bytes",
+    "slice_extract_time_s", "slice_fsync_time_s",
 ]
 
 # Colonnes écrites dans benchmark.csv
@@ -55,6 +58,8 @@ COLONNES_SORTIE = [
     "compute_time_s", "snapshot_write_time_s", "seismo_write_time_s",
     "snapshot_count", "snapshot_bytes", "seismo_bytes", "max_rss_kb",
     "nb_nodes", "nb_steps", "viz_snapshot_s", "viz_sismos_s", "viz_s",
+    "slice_write_time_s", "slice_count", "slice_bytes", "slice_extract_time_s",
+    "slice_fsync_time_s",
 ]
 
 
@@ -92,6 +97,10 @@ def mesurer_visu(viz_dir, dossier_run, mode):
     if mode == "avec":
         t_snap = chronometrer([sys.executable, os.path.join(viz_dir, "plot_snapshot.py"),
                         os.path.join(dossier_run, "snapshots")], env)
+    if mode == "slices":
+        t_snap = chronometrer([sys.executable, os.path.join(viz_dir, "plot_snapshot.py"),
+                        os.path.join(dossier_run, "slices")], env)
+        
     t_sis = chronometrer([sys.executable, os.path.join(viz_dir, "plot_sismos.py"),
                           dossier_run], env)
     if t_snap is None or t_sis is None:
@@ -112,6 +121,11 @@ def lancer(exe, ex, threads, mode, run, args, dossier_run, fichier_rcv):
     if mode == "avec":
         cmd += ["--snapshots", "--snap-interval", str(args.snap_interval),
                 "--snap-folder", snap]
+        
+    if mode == "slices":
+        cmd += ["--slices", "--snap-interval", str(args.snap_interval),
+                "--slice-pos", "1000",
+                "--slice-folder", os.path.join(dossier_run, "slices")]
     env = os.environ.copy()
     if threads:
         env["OMP_NUM_THREADS"] = str(threads)
@@ -146,6 +160,12 @@ def med(lignes, cle, **filtre):
             if all(l[k] == v for k, v in filtre.items()) and l[cle] is not None]
     return statistics.median(vals) if vals else float("nan")
 
+def minmax(lignes, cle, **filtre):
+    """(min, max) de la colonne `cle` sur les lignes qui vérifient le filtre."""
+    vals = [l[cle] for l in lignes
+            if all(l[k] == v for k, v in filtre.items()) and l[cle] is not None]
+    return (min(vals), max(vals)) if vals else (float("nan"), float("nan"))
+
 
 def ecrire_resume(lignes, tailles, chemin):
     """Tableaux Markdown (médianes) : à coller dans le rapport."""
@@ -176,6 +196,67 @@ def ecrire_resume(lignes, tailles, chemin):
                       f"| {surcout:.1f} | {mo:.2f} | {moy:.2f} | {debit:.1f} "
                       f"| {ram:.0f} | {visu:.2f} |\n")
     texte += "## Coût du workflow ad-hoc\n\n" + entete + corps
+
+
+    # ----- Tableau 2 : snapshots vs slices -----
+    entete2 = ("| Éléments | Threads | Snapshots (Mo) | Slices (Mo) | Rapport taille "
+               "| Écriture snap. (s) | Extraction slices (s) | Écriture slices (s) | fsync slices (s) | Rapport écriture "
+               "| Image snap. (s) | Image slice (s) "
+               "| Workflow snap. (s) | Workflow slice (s) |\n"
+               "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n")
+    corps2 = ""
+    for ex in tailles:
+        for th in threads_vus:
+            f_avec = dict(ex=ex, threads=th, mode="avec")
+            f_sl = dict(ex=ex, threads=th, mode="slices")
+
+            # tailles écrites (en Mo)
+            mo_snap = med(lignes, "snapshot_bytes", **f_avec) / 1e6
+            mo_sl = med(lignes, "slice_bytes", **f_sl) / 1e6
+
+            # temps d'écriture pendant la simulation
+            ecr_snap = med(lignes, "snapshot_write_time_s", **f_avec)
+            ecr_sl = med(lignes, "slice_write_time_s", **f_sl)
+            ext_sl = med(lignes, "slice_extract_time_s", **f_sl)
+            fs_sl = med(lignes, "slice_fsync_time_s", **f_sl)
+
+            # temps pour faire l'image après la simulation
+            img_snap = med(lignes, "viz_snapshot_s", **f_avec)
+            img_sl = med(lignes, "viz_snapshot_s", **f_sl)
+
+            # temps total du workflow = simulation + image
+            wf_snap = med(lignes, "wall_s", **f_avec) + img_snap
+            wf_sl = med(lignes, "wall_s", **f_sl) + img_sl
+
+            # rapports (combien de fois mieux)
+            r_taille = mo_snap / mo_sl if mo_sl > 0 else float("nan")
+            cout_sl = ext_sl + ecr_sl   # coût total d'une slice pendant la simulation
+            r_ecr = ecr_snap / cout_sl if cout_sl > 0 else float("nan")
+
+            corps2 += (f"| {ex}³ | {th} | {mo_snap:.2f} | {mo_sl:.3f} | ×{r_taille:.0f} "
+                       f"| {ecr_snap:.3f} | {ext_sl:.4f} | {ecr_sl:.4f} | {fs_sl:.4f} | ×{r_ecr:.0f} "
+                       f"| {img_snap:.2f} | {img_sl:.2f} "
+                       f"| {wf_snap:.2f} | {wf_sl:.2f} |\n")
+    texte += "\n## Snapshots vs slices\n\n" + entete2 + corps2
+
+    # ----- Tableau 3 : dispersion -----
+    n_rep = len([l for l in lignes if l["mode"] == "sans"
+                 and l["ex"] == tailles[0] and l["threads"] == threads_vus[0]])
+    entete3 = ("| Éléments | Mode | Simulation (s) | Image (s) |\n"
+               "|---|---|---|---|\n")
+    corps3 = ""
+    for ex in tailles:
+        for th in threads_vus:
+            for mode in ("sans", "avec", "slices"):
+                f = dict(ex=ex, threads=th, mode=mode)
+                cases = []
+                for cle in ("wall_s", "viz_snapshot_s"):
+                    m = med(lignes, cle, **f)
+                    lo, hi = minmax(lignes, cle, **f)
+                    cases.append(f"{m:.3f} [{lo:.3f} – {hi:.3f}]")
+                corps3 += f"| {ex}³ | {mode} | {cases[0]} | {cases[1]} |\n"
+    texte += (f"\n## Dispersion : médiane [min – max] sur {n_rep} répétitions "
+              f"(chauffe écartée)\n\n" + entete3 + corps3)
 
     if len(threads_vus) > 1:
         ref = threads_vus[0]
@@ -240,6 +321,51 @@ def tracer(lignes, tailles, dossier):
     fig.savefig(chemin, dpi=150)
     print("Graphique écrit :", chemin)
 
+    # ----- Figure 2 : snapshots vs slices -----
+    fig, (b1, b2, b3) = plt.subplots(1, 3, figsize=(14, 4))
+    cas = [
+        # (mode, colonne taille, colonne écriture, nom de la courbe)
+        ("avec", "snapshot_bytes", "snapshot_write_time_s", "snapshots"),
+        ("slices", "slice_bytes", "slice_write_time_s", "slices"),
+    ]
+    for mode, col_taille, col_ecriture, nom in cas:
+        tailles_mo = [med(lignes, col_taille, ex=ex, threads=th, mode=mode) / 1e6
+                      for ex in tailles]
+        ecritures = [med(lignes, col_ecriture, ex=ex, threads=th, mode=mode)
+                     + (med(lignes, "slice_extract_time_s", ex=ex, threads=th, mode=mode)
+                        if mode == "slices" else 0)
+                     for ex in tailles]
+        totaux = [med(lignes, "wall_s", ex=ex, threads=th, mode=mode)
+                  + med(lignes, "viz_snapshot_s", ex=ex, threads=th, mode=mode)
+                  for ex in tailles]
+        b1.plot(elements, tailles_mo, "o-", label=nom)
+        b2.plot(elements, ecritures, "o-", label=nom)
+        b3.plot(elements, totaux, "o-", label=nom)
+
+    b2.plot(elements, [med(lignes, "slice_extract_time_s", ex=ex, threads=th, mode="slices")
+                    for ex in tailles], "o--", label="slices : extraction seule")
+
+    b1.set_title("Volume écrit sur disque")
+    b1.set_ylabel("taille (Mo)")
+    b2.set_title("Coût de la sortie pendant la simulation")
+    b2.set_ylabel("temps (s)")
+    b3.set_title("Workflow total (simulation + image)")
+    b3.set_ylabel("temps (s)")
+    for b in (b1, b2, b3):
+        b.set_xlabel("nombre d'éléments")
+        b.set_xscale("log")
+        b.legend()
+        b.grid(alpha=0.3)
+        b.set_xticks(elements)
+        b.set_xticklabels([f"{ex}³" for ex in tailles])
+        b.xaxis.set_minor_formatter(NullFormatter())
+    b1.set_yscale("log")
+    b2.set_yscale("log")
+    fig.tight_layout()
+    chemin = os.path.join(dossier, "benchmark_slices.png")
+    fig.savefig(chemin, dpi=150)
+    print("Graphique écrit :", chemin)    
+
     if len(threads_vus) > 1:
         ref = threads_vus[0]
         fig, ax = plt.subplots(figsize=(5, 4))
@@ -264,7 +390,8 @@ def main():
     ap.add_argument("--exe", required=True)
     ap.add_argument("--sizes", type=int, nargs="+", default=[10, 20, 30])
     ap.add_argument("--threads", type=int, nargs="+", default=None)
-    ap.add_argument("--repeats", type=int, default=3)
+    ap.add_argument("--repeats", type=int, default=5)
+    ap.add_argument("--warmup", type=int, default=1)
     ap.add_argument("--timemax", type=float, default=0.2)
     ap.add_argument("--snap-interval", type=int, default=25)
     ap.add_argument("--viz-dir", default="visualisation")
@@ -292,17 +419,21 @@ def main():
 
     liste_threads = args.threads or [None]
     lignes = []
-    total_runs = len(args.sizes) * len(liste_threads) * 2 * args.repeats
+    total_runs = len(args.sizes) * len(liste_threads) * 3 * (args.warmup + args.repeats)
     n = 0
     dossier_run = os.path.join(out, "run_tmp")
     for ex in args.sizes:
         for th in liste_threads:
-            for mode in ("sans", "avec"):
-                for run in range(1, args.repeats + 1):
+            for mode in ("sans", "avec", "slices"):
+                for run in range(args.warmup + args.repeats):
                     n += 1
+                    chauffe = run < args.warmup   # les premières exécutions ne comptent pas
+                    etiquette = "chauffe" if chauffe else f"essai {run - args.warmup + 1}"
                     print(f"[{n}/{total_runs}] maillage {ex}³, threads={th or 'défaut'}, "
-                          f"{mode} snapshots, essai {run}", flush=True)
-                    lignes.append(lancer(exe, ex, th, mode, run, args, dossier_run, fichier_rcv))
+                          f"mode {mode}, {etiquette}", flush=True)
+                    mesure = lancer(exe, ex, th, mode, run + 1, args, dossier_run, fichier_rcv)
+                    if not chauffe:
+                        lignes.append(mesure)
     shutil.rmtree(dossier_run, ignore_errors=True)
 
     with open(os.path.join(out, "benchmark.csv"), "w", newline="") as f:
