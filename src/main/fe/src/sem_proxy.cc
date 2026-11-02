@@ -180,8 +180,9 @@ static void syncFile(const std::string& path)
 
 void SEMproxy::run()
 {
-  time_point<system_clock> startComputeTime, startOutputTime, totalComputeTime,
-      totalOutputTime;
+  // accumulateurs de durees (type garde pour l'ecriture de metrics.csv)
+  time_point<system_clock> totalComputeTime, totalOutputTime;
+  std::chrono::steady_clock::time_point startOutputTime;  // annexe 1
   double snapshotWriteTime = 0.0;  
   int snapshotCount = 0;           
   std::size_t snapshotBytes = 0;  
@@ -217,10 +218,10 @@ void SEMproxy::run()
     const auto startCompute = std::chrono::steady_clock::now();
     m_solver->computeOneStep(dt_, indexTimeSample, solverData);
     Kokkos::fence();  // annexe 1 : attendre la vraie fin du calcul GPU
-    totalComputeTime += std::chrono::steady_clock::now() - startCompute;
-
-    startOutputTime = system_clock::now();
-
+    totalComputeTime += std::chrono::duration_cast<system_clock::duration>(
+        std::chrono::steady_clock::now() - startCompute);
+    startOutputTime = std::chrono::steady_clock::now();
+  
     if (indexTimeSample % 50 == 0)
     {
       m_solver->outputSolutionValues(indexTimeSample, i1, rhsElement[0],
@@ -341,7 +342,9 @@ void SEMproxy::run()
     solverData.m_i1 = solverData.m_i2;
     solverData.m_i2 = tmp;
 
-    totalOutputTime += system_clock::now() - startOutputTime;
+    Kokkos::fence();  // annexe 1 : les traitements in-situ sur GPU sont finis
+    totalOutputTime += std::chrono::duration_cast<system_clock::duration>(
+        std::chrono::steady_clock::now() - startOutputTime);
   }
   
   const auto tWrite0 = std::chrono::steady_clock::now();
