@@ -203,7 +203,8 @@ void SEMproxy::run()
 
   // sismos in-situ : un accumulateur par recepteur (memoire constante)
   std::vector<SeismoStream> seismoStreams(opt_.insitu_sismos ? nb_receivers_ : 0);
-  double insituSismosTime = 0.0;                   
+  double insituSismosTime = 0.0;
+  double seismoExtractTime = 0.0;  // extraction des recepteurs (dont migration UVM)                   
 
   double sliceWriteTime = 0.0;     // secondes passées à écrire les slices
   int sliceCount = 0;              // nombre de slices écrites
@@ -217,10 +218,14 @@ void SEMproxy::run()
   for (int indexTimeSample = 0; indexTimeSample < num_sample_;
        indexTimeSample++)
   {
+#ifdef USE_KOKKOS
     Kokkos::fence();  // annexe 1 : le GPU a fini le travail precedent
+#endif
     const auto startCompute = std::chrono::steady_clock::now();
     m_solver->computeOneStep(dt_, indexTimeSample, solverData);
+#ifdef USE_KOKKOS
     Kokkos::fence();  // annexe 1 : attendre la vraie fin du calcul GPU
+#endif
     totalComputeTime += std::chrono::duration_cast<system_clock::duration>(
         std::chrono::steady_clock::now() - startCompute);
     startOutputTime = std::chrono::steady_clock::now();
@@ -234,6 +239,12 @@ void SEMproxy::run()
     // Save pressure at receivers
     if (!opt_.no_seismos)  // --no-seismos : pas de lecture sur l'hote (UVM)
     {
+      // Extraction des recepteurs : lecture de quelques noeuds du champ depuis
+      // l'hote. Avec la memoire unifiee (UVM), cette lecture fait migrer des
+      // pages GPU -> hote (annexe, section 2) : on la chronometre a part. Le GPU
+      // est deja synchronise par le fence qui suit computeOneStep. Le retour des
+      // pages vers le GPU apparait dans le temps de calcul du pas suivant.
+      const auto startExtract = std::chrono::steady_clock::now();
       const int order = m_mesh->getOrder();
       const int npe = order + 1;
 
@@ -250,9 +261,13 @@ void SEMproxy::run()
             }
         pnAtReceiver(r, indexTimeSample) = val;
       }
+      seismoExtractTime += std::chrono::duration<double>(
+                               std::chrono::steady_clock::now() - startExtract)
+                               .count();
     }
 
-    // Sismos in-situ : on ajoute la valeur de ce pas a chaque accumulateur
+    // Sismos in-situ : on ajoute la valeur de ce pas a chaque accumulateur.
+    // Pas besoin d'un autre fence : on ne lit que pnAtReceiver, deja sur l'hote.
     if (opt_.insitu_sismos)
     {
       const auto startSismos = std::chrono::steady_clock::now();
@@ -348,7 +363,9 @@ void SEMproxy::run()
     solverData.m_i1 = solverData.m_i2;
     solverData.m_i2 = tmp;
 
+#ifdef USE_KOKKOS
     Kokkos::fence();  // annexe 1 : les traitements in-situ sur GPU sont finis
+#endif
     totalOutputTime += std::chrono::duration_cast<system_clock::duration>(
         std::chrono::steady_clock::now() - startOutputTime);
   }
@@ -464,8 +481,12 @@ void SEMproxy::run()
   double seismoWriteTime = 0.0;
   std::size_t seismoBytes = 0;
 
+  seismo_extract_s_ = seismoExtractTime;  // pour metrics.csv
+
   if (!opt_.no_seismos)
   {
+    std::cout << "---- Seismo extract time : " << seismoExtractTime
+              << " seconds (all steps)." << std::endl;
     const auto startSeismo = std::chrono::steady_clock::now();
     saveSeismos();
     seismoWriteTime =
@@ -690,7 +711,7 @@ void SEMproxy::writeMetrics(double computeTime, double snapshotWriteTime,
             "slices,slice_axis,slice_pos,slice_write_time_s,"
             "slice_count,slice_bytes,slice_extract_time_s,slice_fsync_time_s,"
             "fsync,snapshot_sync_time_s,insitu_stats_s,insitu_hist_s,"
-            "insitu_vel_s,insitu_write_s\n";
+            "insitu_vel_s,insitu_write_s,seismo_extract_time_s\n";
   }
   file << std::setprecision(9) << opt_.ex << ',' << opt_.ey << ',' << opt_.ez
        << ',' << opt_.order << ',' << m_mesh->getNumberOfNodes() << ','
@@ -698,7 +719,9 @@ void SEMproxy::writeMetrics(double computeTime, double snapshotWriteTime,
        << num_sample_ << ',' << threads << ',' << (is_snapshots_ ? 1 : 0)
        << ',' << snap_time_interval_ << ',' << computeTime << ','
        << snapshotWriteTime << ',' << snapshotCount << ',' << snapshotBytes
-       << ',' << usage.ru_maxrss << ',' << nb_receivers_ << ','
+       << ',' << usage.ru_maxrss << ','
+       << (opt_.no_seismos ? 0 : nb_receivers_)  // --no-seismos : aucun recepteur utilise
+       << ','
        << seismoWriteTime << ',' << seismoBytes << ','
        << (opt_.insitu_sismos ? 1 : 0) << ',' << insitu_sismos_loop_s_ << ','
        << insitu_sismos_final_s_ << ',' << seismo_fsync_s_ << ','
@@ -707,7 +730,7 @@ void SEMproxy::writeMetrics(double computeTime, double snapshotWriteTime,
        << ',' << sliceExtractTime << ',' << sliceFsyncTime << ','
        << (opt_.fsync_snapshots ? 1 : 0) << ',' << snapshotSyncTime_ << ','
        << insitu_stats_s_ << ',' << insitu_hist_s_ << ',' << insitu_vel_s_
-       << ',' << insitu_write_s_ << '\n';
+       << ',' << insitu_write_s_ << ',' << seismo_extract_s_ << '\n';
 }
 
 // Initialize arrays

@@ -1,10 +1,11 @@
 """Benchmark des sismos : workflow ad-hoc vs in-situ (TP2, étape 4).
 
 Pour chaque taille (ex = ey = ez) et chaque répétition, le script lance :
-  - "sans"   : la simulation seule (sismos écrits, pas d'in-situ)
+  - "ref"    : la simulation sans aucune sortie (--no-seismos --quiet) : référence
+  - "sans"   : la simulation avec les sismos écrits, sans in-situ
   - "avec"   : la simulation avec --insitu-sismos, puis sur CE MÊME run
                l'analyse ad-hoc (sismos_adhoc.py) et la précision (precision_sismos.py)
-Les deux modes sont alternés à chaque répétition (limite l'effet d'une dérive
+Les trois modes sont alternés à chaque répétition (limite l'effet d'une dérive
 de la machine). Une exécution de chauffe (run 0) est faite avant les mesures
 et n'est pas comptée (initialisation CUDA/Kokkos, cache froid : annexe §5).
 
@@ -58,8 +59,11 @@ def lancer(args, ex, mode, run):
     os.makedirs(dossier)
     metrics = os.path.join(dossier, "metrics.csv")
     cmd = [args.exe, "--ex", str(ex), "--ey", str(ex), "--ez", str(ex),
-           "--timemax", str(args.timemax), "--receivers-file", args.receivers,
-           "--seismo-dir", dossier, "--metrics-file", metrics]
+           "--timemax", str(args.timemax), "--metrics-file", metrics, "--quiet"]
+    if mode == "ref":
+        cmd += ["--no-seismos"]  # référence : aucune extraction, aucune écriture
+    else:
+        cmd += ["--receivers-file", args.receivers, "--seismo-dir", dossier]
     if mode == "avec":
         cmd += ["--insitu-sismos", "--insitu-sismos-file",
                 os.path.join(dossier, "insitu_sismos.csv")]
@@ -75,7 +79,8 @@ def lancer(args, ex, mode, run):
     res = {"ex": ex, "mode": mode, "run": run, "wall_s": mur}
     for col in ("nb_nodes", "nb_steps", "nb_receivers", "compute_time_s",
                 "max_rss_kb", "seismo_write_time_s", "seismo_fsync_time_s",
-                "seismo_bytes", "insitu_sismos_loop_s", "insitu_sismos_final_s"):
+                "seismo_bytes", "insitu_sismos_loop_s", "insitu_sismos_final_s",
+                "seismo_extract_time_s"):
         res[col] = m[col]
 
     if mode == "avec":
@@ -95,7 +100,7 @@ COLONNES = ["ex", "mode", "run", "wall_s", "nb_nodes", "nb_steps", "nb_receivers
             "compute_time_s", "max_rss_kb", "seismo_write_time_s",
             "seismo_fsync_time_s", "seismo_bytes", "insitu_sismos_loop_s",
             "insitu_sismos_final_s", "adhoc_read_s", "adhoc_analysis_s",
-            "max_rel_error"]
+            "max_rel_error", "seismo_extract_time_s"]
 
 
 def resume(lignes, chemin):
@@ -114,18 +119,21 @@ def resume(lignes, chemin):
         f.write("Écriture = temps vu par l'application ; persistance = écriture + fsync.\n")
         f.write("Lecture ad-hoc à chaud (fichiers juste écrits, servis par le cache).\n\n")
         f.write("## Temps par phase (ms)\n\n")
-        f.write("| Taille | Écriture sismos | fsync | Lecture ad-hoc | Analyse ad-hoc | In-situ boucle | In-situ fin |\n")
-        f.write("|---|---|---|---|---|---|---|\n")
+        f.write("| Taille | Extraction récepteurs (UVM) | Écriture sismos | fsync | Lecture ad-hoc | Analyse ad-hoc | In-situ boucle | In-situ fin |\n")
+        f.write("|---|---|---|---|---|---|---|---|\n")
         for ex in tailles:
-            f.write(f"| {ex}³ | {stat(ex,'avec','seismo_write_time_s',1)} | "
+            f.write(f"| {ex}³ | {stat(ex,'avec','seismo_extract_time_s',1)} | {stat(ex,'avec','seismo_write_time_s',1)} | "
                     f"{stat(ex,'avec','seismo_fsync_time_s',1)} | {stat(ex,'avec','adhoc_read_s',1)} | "
                     f"{stat(ex,'avec','adhoc_analysis_s',1)} | {stat(ex,'avec','insitu_sismos_loop_s',1)} | "
                     f"{stat(ex,'avec','insitu_sismos_final_s',1)} |\n")
         f.write("\n## Impact sur la simulation (s)\n\n")
-        f.write("| Taille | Calcul sans in-situ | Calcul avec in-situ | Total sans | Total avec |\n")
-        f.write("|---|---|---|---|---|\n")
+        f.write("Référence = aucune sortie (--no-seismos). L'écart de calcul entre référence et "
+                "« sans in-situ » montre le retour des pages UVM vers le GPU après l'extraction (annexe 2).\n\n")
+        f.write("| Taille | Calcul référence | Calcul sans in-situ | Calcul avec in-situ | Total référence | Total sans | Total avec |\n")
+        f.write("|---|---|---|---|---|---|---|\n")
         for ex in tailles:
-            f.write(f"| {ex}³ | {stat(ex,'sans','compute_time_s')} | {stat(ex,'avec','compute_time_s')} | "
+            f.write(f"| {ex}³ | {stat(ex,'ref','compute_time_s')} | {stat(ex,'sans','compute_time_s')} | "
+                    f"{stat(ex,'avec','compute_time_s')} | {stat(ex,'ref','wall_s')} | "
                     f"{stat(ex,'sans','wall_s')} | {stat(ex,'avec','wall_s')} |\n")
         f.write("\n## Volume et précision\n\n")
         f.write("| Taille | Nœuds | Pas | seismos.csv (octets) | Écart relatif max in-situ / ad-hoc |\n")
@@ -163,7 +171,7 @@ def main():
     lignes = []
     for ex in args.sizes:
         for run in range(args.repeats + 1):  # run 0 = chauffe
-            for mode in ("sans", "avec"):
+            for mode in ("ref", "sans", "avec"):
                 r = lancer(args, ex, mode, run)
                 lignes.append(r)
                 print(f"{ex}³ {mode} run {run} : {r['wall_s']:.2f} s")

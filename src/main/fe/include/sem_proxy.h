@@ -124,6 +124,7 @@ class SEMproxy
   double insitu_sismos_loop_s_ = 0.0;   // temps in-situ sismos dans la boucle
   double insitu_sismos_final_s_ = 0.0;  // temps in-situ sismos en fin de simulation
   double seismo_fsync_s_ = 0.0;         // temps du fsync de seismos.csv
+  double seismo_extract_s_ = 0.0;       // temps d'extraction des recepteurs (tous les pas)
   double insitu_stats_s_ = 0.0;  // temps in-situ stats (boucle)
   double insitu_hist_s_ = 0.0;   // temps in-situ histogramme (boucle)
   double insitu_vel_s_ = 0.0;    // temps in-situ pics par noeud (boucle)
