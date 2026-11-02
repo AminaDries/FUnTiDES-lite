@@ -213,9 +213,11 @@ void SEMproxy::run()
   for (int indexTimeSample = 0; indexTimeSample < num_sample_;
        indexTimeSample++)
   {
-    startComputeTime = system_clock::now();
+    Kokkos::fence();  // annexe 1 : le GPU a fini le travail precedent
+    const auto startCompute = std::chrono::steady_clock::now();
     m_solver->computeOneStep(dt_, indexTimeSample, solverData);
-    totalComputeTime += system_clock::now() - startComputeTime;
+    Kokkos::fence();  // annexe 1 : attendre la vraie fin du calcul GPU
+    totalComputeTime += std::chrono::steady_clock::now() - startCompute;
 
     startOutputTime = system_clock::now();
 
