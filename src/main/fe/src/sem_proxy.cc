@@ -719,7 +719,9 @@ void SEMproxy::writeMetrics(double computeTime, double snapshotWriteTime,
        << num_sample_ << ',' << threads << ',' << (is_snapshots_ ? 1 : 0)
        << ',' << snap_time_interval_ << ',' << computeTime << ','
        << snapshotWriteTime << ',' << snapshotCount << ',' << snapshotBytes
-       << ',' << usage.ru_maxrss << ',' << nb_receivers_ << ','
+       << ',' << usage.ru_maxrss << ','
+       << (opt_.no_seismos ? 0 : nb_receivers_)  // --no-seismos : aucun recepteur utilise
+       << ','
        << seismoWriteTime << ',' << seismoBytes << ','
        << (opt_.insitu_sismos ? 1 : 0) << ',' << insitu_sismos_loop_s_ << ','
        << insitu_sismos_final_s_ << ',' << seismo_fsync_s_ << ','
