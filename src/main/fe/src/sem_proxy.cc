@@ -225,7 +225,7 @@ void SEMproxy::run()
         std::chrono::steady_clock::now() - startCompute);
     startOutputTime = std::chrono::steady_clock::now();
   
-    if (indexTimeSample % 50 == 0)
+    if (!opt_.quiet && indexTimeSample % 50 == 0)
     {
       m_solver->outputSolutionValues(indexTimeSample, i1, rhsElement[0],
                                      pnGlobal, "pnGlobal");

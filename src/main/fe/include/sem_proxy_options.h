@@ -55,6 +55,7 @@ class SemProxyOptions
   std::string insitu_vel_file = "insitu_vel.csv";
   bool fsync_snapshots = false;
   bool no_seismos = false;                             // reference : pas de sismos
+  bool quiet = false;  
   bool insitu_sismos = false;                          // stats des sismos en flux ?
   std::string insitu_sismos_file = "insitu_sismos.csv"; // fichier de sortie
   
@@ -162,6 +163,8 @@ class SemProxyOptions
         cxxopts::value<bool>(o.insitu_sismos))(
         "no-seismos", "Disable receivers and seismos.csv (reference run)",
         cxxopts::value<bool>(o.no_seismos))(
+        "quiet", "Disable periodic debug output of pnGlobal",
+        cxxopts::value<bool>(o.quiet))(
         "insitu-sismos-file", "CSV file where in-situ seismogram stats are written",
         cxxopts::value<std::string>(o.insitu_sismos_file));
       }
