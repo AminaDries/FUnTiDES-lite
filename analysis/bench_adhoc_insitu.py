@@ -170,8 +170,11 @@ def une_execution(args, ex, label, mode, run, dossier, fichier_rcv, froid):
     f_vel = os.path.join(rep, "insitu_vel.csv")
 
     cmd = [args.exe, "--ex", str(ex), "--ey", str(ex), "--ez", str(ex),
-           "--timemax", str(args.timemax), "--receivers-file", fichier_rcv,
-           "--seismo-dir", rep, "--metrics-file", metrics]
+           "--timemax", str(args.timemax), "--metrics-file", metrics,
+           # reference sans aucune sortie (groupe, TP2) : pas de sismos ni
+           # d'extraction des recepteurs, pas d'affichage periodique. Les sismos
+           # sont mesures a part par benchmark/bench_sismos.py.
+           "--no-seismos", "--quiet"]
     if mode.startswith("adhoc"):
         cmd += ["--snapshots", "--snap-interval", str(args.snap_interval),
                 "--snap-folder", snaps]
