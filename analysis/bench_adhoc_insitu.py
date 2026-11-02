@@ -51,7 +51,7 @@ COLONNES_METRICS = [
     "nb_nodes", "nb_elements", "dt", "nb_steps", "threads",
     "compute_time_s", "snapshot_write_time_s", "snapshot_sync_time_s",
     "snapshot_count", "snapshot_bytes", "max_rss_kb", "seismo_write_time_s",
-    "insitu_stats_s", "insitu_hist_s", "insitu_vel_s", "insitu_write_s",
+    "insitu_stats_s", "insitu_hist_s", "insitu_vel_s", "insitu_write_s", "snapshot_copy_s", "insitu_copy_s",
 ]
 COLONNES_PY = ["py_stats_s", "py_hist_s", "py_vel_s", "py_total_s"]
 COLONNES = (["config", "ex", "mode", "run", "wall_s", "initial_s", "kernel_s",
@@ -258,7 +258,7 @@ def ecrire_resume(toutes, meta, chemin):
         ("snapshot_write_time_s", "ecriture snapshots (s)"),
         ("snapshot_sync_time_s", "dont fsync (s)"),
         ("insitu_stats_s", "in-situ stats (s)"), ("insitu_hist_s", "in-situ hist (s)"),
-        ("insitu_vel_s", "in-situ vitesse (s)"), ("insitu_write_s", "ecriture in-situ (s)"),
+        ("insitu_vel_s", "in-situ vitesse (s)"), ("insitu_write_s", "ecriture in-situ (s)"), ("snapshot_copy_s", "copie GPU->hote snapshots (s)"), ("insitu_copy_s", "copie GPU->hote in-situ (s)"),
         ("py_total_s", "Python ad-hoc (s)"),
     ]
     texte = "# Resume des mesures\n\n"
