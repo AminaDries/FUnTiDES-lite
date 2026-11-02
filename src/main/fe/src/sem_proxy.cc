@@ -55,6 +55,9 @@ SEMproxy::SEMproxy(const SemProxyOptions& opt)
   domain_size_[1] = opt.ly;
   domain_size_[2] = opt.lz;
 
+  if (opt.no_seismos && opt.insitu_sismos)
+    throw std::runtime_error("--no-seismos et --insitu-sismos sont incompatibles");
+
   seismo_dir_ = opt.seismo_dir;
   readReceivers(opt.receivers_file, opt);
 
@@ -229,21 +232,24 @@ void SEMproxy::run()
     }
 
     // Save pressure at receivers
-    const int order = m_mesh->getOrder();
-    const int npe = order + 1;
-
-    for (int r = 0; r < nb_receivers_; r++)
+    if (!opt_.no_seismos)  // --no-seismos : pas de lecture sur l'hote (UVM)
     {
-      float val = 0.f;
-      for (int i = 0; i < npe; i++)
-        for (int j = 0; j < npe; j++)
-          for (int k = 0; k < npe; k++)
-          {
-            int nodeIdx = m_mesh->globalNodeIndex(rhsElementRcv[r], i, j, k);
-            int local = i + j * npe + k * npe * npe;
-            val += solverData.m_pnGlobal(nodeIdx, i1) * rhsWeightsRcv(r, local);
-          }
-      pnAtReceiver(r, indexTimeSample) = val;
+      const int order = m_mesh->getOrder();
+      const int npe = order + 1;
+
+      for (int r = 0; r < nb_receivers_; r++)
+      {
+        float val = 0.f;
+        for (int i = 0; i < npe; i++)
+          for (int j = 0; j < npe; j++)
+            for (int k = 0; k < npe; k++)
+            {
+              int nodeIdx = m_mesh->globalNodeIndex(rhsElementRcv[r], i, j, k);
+              int local = i + j * npe + k * npe * npe;
+              val += solverData.m_pnGlobal(nodeIdx, i1) * rhsWeightsRcv(r, local);
+            }
+        pnAtReceiver(r, indexTimeSample) = val;
+      }
     }
 
     // Sismos in-situ : on ajoute la valeur de ce pas a chaque accumulateur
@@ -454,35 +460,41 @@ void SEMproxy::run()
               << std::endl;
   }
 
-  const auto startSeismo = std::chrono::steady_clock::now();
-  saveSeismos();
-  const double seismoWriteTime =
-      std::chrono::duration<double>(std::chrono::steady_clock::now() -
-                                    startSeismo)
-          .count();
-  const std::size_t seismoBytes =
-      std::filesystem::file_size(seismo_dir_ + "/seismos.csv");
-  std::cout << "---- Seismo write time   : " << seismoWriteTime
-            << " seconds." << std::endl;
+  // --no-seismos (mesure de reference) : ni ecriture ni fsync des sismos
+  double seismoWriteTime = 0.0;
+  std::size_t seismoBytes = 0;
 
-  // Persistance (annexe, section 3) : l'ecriture ci-dessus s'arrete quand les
-  // donnees sont dans le cache du systeme ; fsync attend qu'elles soient sur
-  // le disque. On chronometre fsync a part : persistance = ecriture + fsync.
-  const auto startSync = std::chrono::steady_clock::now();
-  for (const char* nom : {"/seismos.csv", "/receivers.csv"})
+  if (!opt_.no_seismos)
   {
-    const int fd = ::open((seismo_dir_ + nom).c_str(), O_RDONLY);
-    if (fd >= 0)
+    const auto startSeismo = std::chrono::steady_clock::now();
+    saveSeismos();
+    seismoWriteTime =
+        std::chrono::duration<double>(std::chrono::steady_clock::now() -
+                                      startSeismo)
+            .count();
+    seismoBytes = std::filesystem::file_size(seismo_dir_ + "/seismos.csv");
+    std::cout << "---- Seismo write time   : " << seismoWriteTime
+              << " seconds." << std::endl;
+
+    // Persistance (annexe, section 3) : l'ecriture ci-dessus s'arrete quand les
+    // donnees sont dans le cache du systeme ; fsync attend qu'elles soient sur
+    // le disque. On chronometre fsync a part : persistance = ecriture + fsync.
+    const auto startSync = std::chrono::steady_clock::now();
+    for (const char* nom : {"/seismos.csv", "/receivers.csv"})
     {
-      ::fsync(fd);
-      ::close(fd);
+      const int fd = ::open((seismo_dir_ + nom).c_str(), O_RDONLY);
+      if (fd >= 0)
+      {
+        ::fsync(fd);
+        ::close(fd);
+      }
     }
+    seismo_fsync_s_ = std::chrono::duration<double>(
+                          std::chrono::steady_clock::now() - startSync)
+                          .count();
+    std::cout << "---- Seismo fsync time   : " << seismo_fsync_s_ << " seconds."
+              << std::endl;
   }
-  seismo_fsync_s_ = std::chrono::duration<double>(
-                        std::chrono::steady_clock::now() - startSync)
-                        .count();
-  std::cout << "---- Seismo fsync time   : " << seismo_fsync_s_ << " seconds."
-            << std::endl;
 
   float kerneltime_ms = time_point_cast<microseconds>(totalComputeTime)
                             .time_since_epoch()
