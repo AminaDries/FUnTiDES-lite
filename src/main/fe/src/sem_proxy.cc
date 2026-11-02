@@ -55,6 +55,9 @@ SEMproxy::SEMproxy(const SemProxyOptions& opt)
   domain_size_[1] = opt.ly;
   domain_size_[2] = opt.lz;
 
+  if (opt.no_seismos && opt.insitu_sismos)
+    throw std::runtime_error("--no-seismos et --insitu-sismos sont incompatibles");
+
   seismo_dir_ = opt.seismo_dir;
   readReceivers(opt.receivers_file, opt);
 
@@ -180,8 +183,9 @@ static void syncFile(const std::string& path)
 
 void SEMproxy::run()
 {
-  time_point<system_clock> startComputeTime, startOutputTime, totalComputeTime,
-      totalOutputTime;
+  // accumulateurs de durees (type garde pour l'ecriture de metrics.csv)
+  time_point<system_clock> totalComputeTime, totalOutputTime;
+  std::chrono::steady_clock::time_point startOutputTime;  // annexe 1
   double snapshotWriteTime = 0.0;  
   int snapshotCount = 0;           
   std::size_t snapshotBytes = 0;  
@@ -199,7 +203,8 @@ void SEMproxy::run()
 
   // sismos in-situ : un accumulateur par recepteur (memoire constante)
   std::vector<SeismoStream> seismoStreams(opt_.insitu_sismos ? nb_receivers_ : 0);
-  double insituSismosTime = 0.0;                   
+  double insituSismosTime = 0.0;
+  double seismoExtractTime = 0.0;  // extraction des recepteurs (dont migration UVM)                   
 
   double sliceWriteTime = 0.0;     // secondes passées à écrire les slices
   int sliceCount = 0;              // nombre de slices écrites
@@ -213,37 +218,56 @@ void SEMproxy::run()
   for (int indexTimeSample = 0; indexTimeSample < num_sample_;
        indexTimeSample++)
   {
-    startComputeTime = system_clock::now();
+#ifdef USE_KOKKOS
+    Kokkos::fence();  // annexe 1 : le GPU a fini le travail precedent
+#endif
+    const auto startCompute = std::chrono::steady_clock::now();
     m_solver->computeOneStep(dt_, indexTimeSample, solverData);
-    totalComputeTime += system_clock::now() - startComputeTime;
-
-    startOutputTime = system_clock::now();
-
-    if (indexTimeSample % 50 == 0)
+#ifdef USE_KOKKOS
+    Kokkos::fence();  // annexe 1 : attendre la vraie fin du calcul GPU
+#endif
+    totalComputeTime += std::chrono::duration_cast<system_clock::duration>(
+        std::chrono::steady_clock::now() - startCompute);
+    startOutputTime = std::chrono::steady_clock::now();
+  
+    if (!opt_.quiet && indexTimeSample % 50 == 0)
     {
       m_solver->outputSolutionValues(indexTimeSample, i1, rhsElement[0],
                                      pnGlobal, "pnGlobal");
     }
 
     // Save pressure at receivers
-    const int order = m_mesh->getOrder();
-    const int npe = order + 1;
-
-    for (int r = 0; r < nb_receivers_; r++)
+    if (!opt_.no_seismos)  // --no-seismos : pas de lecture sur l'hote (UVM)
     {
-      float val = 0.f;
-      for (int i = 0; i < npe; i++)
-        for (int j = 0; j < npe; j++)
-          for (int k = 0; k < npe; k++)
-          {
-            int nodeIdx = m_mesh->globalNodeIndex(rhsElementRcv[r], i, j, k);
-            int local = i + j * npe + k * npe * npe;
-            val += solverData.m_pnGlobal(nodeIdx, i1) * rhsWeightsRcv(r, local);
-          }
-      pnAtReceiver(r, indexTimeSample) = val;
+      // Extraction des recepteurs : lecture de quelques noeuds du champ depuis
+      // l'hote. Avec la memoire unifiee (UVM), cette lecture fait migrer des
+      // pages GPU -> hote (annexe, section 2) : on la chronometre a part. Le GPU
+      // est deja synchronise par le fence qui suit computeOneStep. Le retour des
+      // pages vers le GPU apparait dans le temps de calcul du pas suivant.
+      const auto startExtract = std::chrono::steady_clock::now();
+      const int order = m_mesh->getOrder();
+      const int npe = order + 1;
+
+      for (int r = 0; r < nb_receivers_; r++)
+      {
+        float val = 0.f;
+        for (int i = 0; i < npe; i++)
+          for (int j = 0; j < npe; j++)
+            for (int k = 0; k < npe; k++)
+            {
+              int nodeIdx = m_mesh->globalNodeIndex(rhsElementRcv[r], i, j, k);
+              int local = i + j * npe + k * npe * npe;
+              val += solverData.m_pnGlobal(nodeIdx, i1) * rhsWeightsRcv(r, local);
+            }
+        pnAtReceiver(r, indexTimeSample) = val;
+      }
+      seismoExtractTime += std::chrono::duration<double>(
+                               std::chrono::steady_clock::now() - startExtract)
+                               .count();
     }
 
-    // Sismos in-situ : on ajoute la valeur de ce pas a chaque accumulateur
+    // Sismos in-situ : on ajoute la valeur de ce pas a chaque accumulateur.
+    // Pas besoin d'un autre fence : on ne lit que pnAtReceiver, deja sur l'hote.
     if (opt_.insitu_sismos)
     {
       const auto startSismos = std::chrono::steady_clock::now();
@@ -339,7 +363,11 @@ void SEMproxy::run()
     solverData.m_i1 = solverData.m_i2;
     solverData.m_i2 = tmp;
 
-    totalOutputTime += system_clock::now() - startOutputTime;
+#ifdef USE_KOKKOS
+    Kokkos::fence();  // annexe 1 : les traitements in-situ sur GPU sont finis
+#endif
+    totalOutputTime += std::chrono::duration_cast<system_clock::duration>(
+        std::chrono::steady_clock::now() - startOutputTime);
   }
   
   const auto tWrite0 = std::chrono::steady_clock::now();
@@ -449,35 +477,45 @@ void SEMproxy::run()
               << std::endl;
   }
 
-  const auto startSeismo = std::chrono::steady_clock::now();
-  saveSeismos();
-  const double seismoWriteTime =
-      std::chrono::duration<double>(std::chrono::steady_clock::now() -
-                                    startSeismo)
-          .count();
-  const std::size_t seismoBytes =
-      std::filesystem::file_size(seismo_dir_ + "/seismos.csv");
-  std::cout << "---- Seismo write time   : " << seismoWriteTime
-            << " seconds." << std::endl;
+  // --no-seismos (mesure de reference) : ni ecriture ni fsync des sismos
+  double seismoWriteTime = 0.0;
+  std::size_t seismoBytes = 0;
 
-  // Persistance (annexe, section 3) : l'ecriture ci-dessus s'arrete quand les
-  // donnees sont dans le cache du systeme ; fsync attend qu'elles soient sur
-  // le disque. On chronometre fsync a part : persistance = ecriture + fsync.
-  const auto startSync = std::chrono::steady_clock::now();
-  for (const char* nom : {"/seismos.csv", "/receivers.csv"})
+  seismo_extract_s_ = seismoExtractTime;  // pour metrics.csv
+
+  if (!opt_.no_seismos)
   {
-    const int fd = ::open((seismo_dir_ + nom).c_str(), O_RDONLY);
-    if (fd >= 0)
+    std::cout << "---- Seismo extract time : " << seismoExtractTime
+              << " seconds (all steps)." << std::endl;
+    const auto startSeismo = std::chrono::steady_clock::now();
+    saveSeismos();
+    seismoWriteTime =
+        std::chrono::duration<double>(std::chrono::steady_clock::now() -
+                                      startSeismo)
+            .count();
+    seismoBytes = std::filesystem::file_size(seismo_dir_ + "/seismos.csv");
+    std::cout << "---- Seismo write time   : " << seismoWriteTime
+              << " seconds." << std::endl;
+
+    // Persistance (annexe, section 3) : l'ecriture ci-dessus s'arrete quand les
+    // donnees sont dans le cache du systeme ; fsync attend qu'elles soient sur
+    // le disque. On chronometre fsync a part : persistance = ecriture + fsync.
+    const auto startSync = std::chrono::steady_clock::now();
+    for (const char* nom : {"/seismos.csv", "/receivers.csv"})
     {
-      ::fsync(fd);
-      ::close(fd);
+      const int fd = ::open((seismo_dir_ + nom).c_str(), O_RDONLY);
+      if (fd >= 0)
+      {
+        ::fsync(fd);
+        ::close(fd);
+      }
     }
+    seismo_fsync_s_ = std::chrono::duration<double>(
+                          std::chrono::steady_clock::now() - startSync)
+                          .count();
+    std::cout << "---- Seismo fsync time   : " << seismo_fsync_s_ << " seconds."
+              << std::endl;
   }
-  seismo_fsync_s_ = std::chrono::duration<double>(
-                        std::chrono::steady_clock::now() - startSync)
-                        .count();
-  std::cout << "---- Seismo fsync time   : " << seismo_fsync_s_ << " seconds."
-            << std::endl;
 
   float kerneltime_ms = time_point_cast<microseconds>(totalComputeTime)
                             .time_since_epoch()
@@ -673,7 +711,7 @@ void SEMproxy::writeMetrics(double computeTime, double snapshotWriteTime,
             "slices,slice_axis,slice_pos,slice_write_time_s,"
             "slice_count,slice_bytes,slice_extract_time_s,slice_fsync_time_s,"
             "fsync,snapshot_sync_time_s,insitu_stats_s,insitu_hist_s,"
-            "insitu_vel_s,insitu_write_s\n";
+            "insitu_vel_s,insitu_write_s,seismo_extract_time_s\n";
   }
   file << std::setprecision(9) << opt_.ex << ',' << opt_.ey << ',' << opt_.ez
        << ',' << opt_.order << ',' << m_mesh->getNumberOfNodes() << ','
@@ -681,7 +719,9 @@ void SEMproxy::writeMetrics(double computeTime, double snapshotWriteTime,
        << num_sample_ << ',' << threads << ',' << (is_snapshots_ ? 1 : 0)
        << ',' << snap_time_interval_ << ',' << computeTime << ','
        << snapshotWriteTime << ',' << snapshotCount << ',' << snapshotBytes
-       << ',' << usage.ru_maxrss << ',' << nb_receivers_ << ','
+       << ',' << usage.ru_maxrss << ','
+       << (opt_.no_seismos ? 0 : nb_receivers_)  // --no-seismos : aucun recepteur utilise
+       << ','
        << seismoWriteTime << ',' << seismoBytes << ','
        << (opt_.insitu_sismos ? 1 : 0) << ',' << insitu_sismos_loop_s_ << ','
        << insitu_sismos_final_s_ << ',' << seismo_fsync_s_ << ','
@@ -690,7 +730,7 @@ void SEMproxy::writeMetrics(double computeTime, double snapshotWriteTime,
        << ',' << sliceExtractTime << ',' << sliceFsyncTime << ','
        << (opt_.fsync_snapshots ? 1 : 0) << ',' << snapshotSyncTime_ << ','
        << insitu_stats_s_ << ',' << insitu_hist_s_ << ',' << insitu_vel_s_
-       << ',' << insitu_write_s_ << '\n';
+       << ',' << insitu_write_s_ << ',' << seismo_extract_s_ << '\n';
 }
 
 // Initialize arrays
