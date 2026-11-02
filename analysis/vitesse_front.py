@@ -29,21 +29,28 @@ def main():
     liste = lister_snapshots(args.dossier)
     pas = np.array([s for s, _ in liste])
     t = pas * args.dt
-    P = []
-    for _, chemin in liste:
-        data = lire_snapshot(chemin)
-        P.append(data[:, 3])
-    P = np.array(P)
-    xyz = data[:, :3]
     nb_snap = len(t)
+    # lecture progressive : un seul snapshot en memoire (evite ~2 x 15 Go a L)
+    amp = None
+    i_pic = None
+    for k, (_, chemin) in enumerate(liste):
+        data = lire_snapshot(chemin)
+        a_k = np.abs(data[:, 3])
+        if amp is None:
+            amp = a_k.copy()
+            i_pic = np.zeros(a_k.shape[0], dtype=np.int32)
+            xyz = data[:, :3].copy()
+        else:
+            plus = a_k > amp          # '>' strict : en cas d'egalite on garde le 1er pic, comme argmax
+            amp[plus] = a_k[plus]
+            i_pic[plus] = k
+        del data, a_k
 
     src = np.array(args.src) if args.src else (xyz.min(axis=0) + xyz.max(axis=0)) / 2
     r = np.linalg.norm(xyz - src, axis=1)
     print(f"{nb_snap} snapshots, {xyz.shape[0]} nœuds, source en {src}")
 
-    i_pic = np.argmax(np.abs(P), axis=0)
     t_pic = t[i_pic]
-    amp = np.abs(P).max(axis=0)
 
     couches = np.arange(0.0, r.max() + 50.0, 50.0)
     lignes, rmax = [], r.max()
