@@ -207,9 +207,14 @@ void SEMproxy::run()
   // Mode "host" (ou build sans Kokkos) : boucles sur l'hote, apres la sonde de copie.
 #ifdef USE_KOKKOS
   const bool insituOnDevice = (opt_.insitu_mode == "device");
-  Kokkos::View<double*, MemSpace> velMaxD("velMaxD", insituOnDevice ? velNodes : 0);
-  Kokkos::View<int*, MemSpace> velStepD("velStepD", insituOnDevice ? velNodes : 0);
-  Kokkos::View<unsigned long long*, MemSpace> histD(
+  // Memoire du GPU seul (CudaSpace), PAS la memoire partagee (UVM) : l'hote
+  // relit les classes a chaque analyse ; en UVM la page ferait l'aller-retour
+  // et le pilote finit par la laisser cote hote -> chaque atomic_add du GPU
+  // traverse alors le PCIe (mesure : x70 sur le temps total a M).
+  using InsituMem = Kokkos::DefaultExecutionSpace::memory_space;
+  Kokkos::View<double*, InsituMem> velMaxD("velMaxD", insituOnDevice ? velNodes : 0);
+  Kokkos::View<int*, InsituMem> velStepD("velStepD", insituOnDevice ? velNodes : 0);
+  Kokkos::View<unsigned long long*, InsituMem> histD(
       "histD", (insituOnDevice && opt_.insitu_hist) ? opt_.insitu_hist_bins + 2 : 0);
 #else
   const bool insituOnDevice = false;
@@ -370,11 +375,17 @@ void SEMproxy::run()
       if (insituOnDevice)
       {
         Kokkos::deep_copy(histD, 0ULL);
+        using HistFunctor = HistogramTeam<arrayReal, decltype(histD)>;
+        const int nnodes = m_mesh->getNumberOfNodes();
+        const int chunk = 8192;  // noeuds par equipe
+        const int nk = opt_.insitu_hist_bins + 2;
+        Kokkos::TeamPolicy<> policy((nnodes + chunk - 1) / chunk, Kokkos::AUTO);
         Kokkos::parallel_for(
-            "insitu_hist", m_mesh->getNumberOfNodes(),
-            HistogramFill<arrayReal, decltype(histD)>{
-                solverData.m_pnGlobal, i1, opt_.insitu_hist_bound,
-                opt_.insitu_hist_bins, histD});
+            "insitu_hist",
+            policy.set_scratch_size(
+                0, Kokkos::PerTeam(HistFunctor::scratch_view::shmem_size(nk))),
+            HistFunctor{solverData.m_pnGlobal, i1, opt_.insitu_hist_bound,
+                        opt_.insitu_hist_bins, nnodes, chunk, histD});
         Kokkos::fence();
         // seules les nbins + 2 classes reviennent sur l'hote
         auto histH = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), histD);
