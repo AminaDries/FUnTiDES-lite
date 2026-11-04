@@ -12,6 +12,10 @@ def main():
     ap.add_argument("--dt", type=float, default=0.001)
     ap.add_argument("--src", type=float, nargs=3, help="source x y z (défaut : centre)")
     ap.add_argument("--rmin", type=float, default=150.0)
+    # Pas de bords absorbants : au-dela d'environ 600 m (bords a 990 m de la
+    # source), l'onde reflechie se superpose a l'onde directe et une partie des
+    # noeuds a son pic plus tard -> on ne garde que r < rmax.
+    ap.add_argument("--rmax", type=float, default=600.0)
     ap.add_argument("--vref", type=float, default=1500.0)
     args = ap.parse_args()
 
@@ -36,9 +40,21 @@ def main():
         if frac_fin > 0.10 and rmax == r.max():
             rmax = lo
 
+    rmax = min(rmax, args.rmax)
     garde = (r >= args.rmin) & (r < rmax) & (i_pic > 0) & (i_pic < nb_snap - 1)
-    v, b = np.polyfit(t_pic[garde], r[garde], 1)
-    t0 = -b / v
+    # Regression t_pic = t0 + r / v, sur la moyenne de t_pic par couche de 25 m.
+    # (L'ancienne regression r = f(t_pic) sous-estimait v d'environ 30 % :
+    # t_pic est arrondi a l'intervalle d'analyse (+-25 ms a 50 pas), et une
+    # erreur sur la variable explicative "aplatit" la pente. Ici l'arrondi est
+    # sur la variable expliquee et se moyenne dans chaque couche.)
+    rc, tc = [], []
+    for lo in np.arange(args.rmin, rmax, 25.0):
+        m = garde & (r >= lo) & (r < lo + 25.0)
+        if m.sum() > 0:
+            rc.append(r[m].mean())
+            tc.append(t_pic[m].mean())
+    pente, t0 = np.polyfit(rc, tc, 1)
+    v = 1.0 / pente
     print(f"Nœuds gardés : {garde.sum()} (distance entre {args.rmin:.0f} m et {rmax:.0f} m)")
     print(f"Vitesse estimée : {v:.0f} m/s   (modèle : {args.vref:.0f} m/s, écart {100*(v-args.vref)/args.vref:+.1f} %)")
     print(f"Instant d'émission apparent : {t0:.3f} s")

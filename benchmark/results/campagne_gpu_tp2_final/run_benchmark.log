@@ -1,0 +1,90 @@
+[1/54] maillage 50³, threads=défaut, mode sans, chauffe
+[2/54] maillage 50³, threads=défaut, mode sans, essai 1
+[3/54] maillage 50³, threads=défaut, mode sans, essai 2
+[4/54] maillage 50³, threads=défaut, mode sans, essai 3
+[5/54] maillage 50³, threads=défaut, mode sans, essai 4
+[6/54] maillage 50³, threads=défaut, mode sans, essai 5
+[7/54] maillage 50³, threads=défaut, mode avec, chauffe
+[8/54] maillage 50³, threads=défaut, mode avec, essai 1
+[9/54] maillage 50³, threads=défaut, mode avec, essai 2
+[10/54] maillage 50³, threads=défaut, mode avec, essai 3
+[11/54] maillage 50³, threads=défaut, mode avec, essai 4
+[12/54] maillage 50³, threads=défaut, mode avec, essai 5
+[13/54] maillage 50³, threads=défaut, mode slices, chauffe
+[14/54] maillage 50³, threads=défaut, mode slices, essai 1
+[15/54] maillage 50³, threads=défaut, mode slices, essai 2
+[16/54] maillage 50³, threads=défaut, mode slices, essai 3
+[17/54] maillage 50³, threads=défaut, mode slices, essai 4
+[18/54] maillage 50³, threads=défaut, mode slices, essai 5
+[19/54] maillage 100³, threads=défaut, mode sans, chauffe
+[20/54] maillage 100³, threads=défaut, mode sans, essai 1
+[21/54] maillage 100³, threads=défaut, mode sans, essai 2
+[22/54] maillage 100³, threads=défaut, mode sans, essai 3
+[23/54] maillage 100³, threads=défaut, mode sans, essai 4
+[24/54] maillage 100³, threads=défaut, mode sans, essai 5
+[25/54] maillage 100³, threads=défaut, mode avec, chauffe
+[26/54] maillage 100³, threads=défaut, mode avec, essai 1
+[27/54] maillage 100³, threads=défaut, mode avec, essai 2
+[28/54] maillage 100³, threads=défaut, mode avec, essai 3
+[29/54] maillage 100³, threads=défaut, mode avec, essai 4
+[30/54] maillage 100³, threads=défaut, mode avec, essai 5
+[31/54] maillage 100³, threads=défaut, mode slices, chauffe
+[32/54] maillage 100³, threads=défaut, mode slices, essai 1
+[33/54] maillage 100³, threads=défaut, mode slices, essai 2
+[34/54] maillage 100³, threads=défaut, mode slices, essai 3
+[35/54] maillage 100³, threads=défaut, mode slices, essai 4
+[36/54] maillage 100³, threads=défaut, mode slices, essai 5
+[37/54] maillage 200³, threads=défaut, mode sans, chauffe
+[38/54] maillage 200³, threads=défaut, mode sans, essai 1
+[39/54] maillage 200³, threads=défaut, mode sans, essai 2
+[40/54] maillage 200³, threads=défaut, mode sans, essai 3
+[41/54] maillage 200³, threads=défaut, mode sans, essai 4
+[42/54] maillage 200³, threads=défaut, mode sans, essai 5
+[43/54] maillage 200³, threads=défaut, mode avec, chauffe
+[44/54] maillage 200³, threads=défaut, mode avec, essai 1
+[45/54] maillage 200³, threads=défaut, mode avec, essai 2
+[46/54] maillage 200³, threads=défaut, mode avec, essai 3
+[47/54] maillage 200³, threads=défaut, mode avec, essai 4
+[48/54] maillage 200³, threads=défaut, mode avec, essai 5
+[49/54] maillage 200³, threads=défaut, mode slices, chauffe
+[50/54] maillage 200³, threads=défaut, mode slices, essai 1
+[51/54] maillage 200³, threads=défaut, mode slices, essai 2
+[52/54] maillage 200³, threads=défaut, mode slices, essai 3
+[53/54] maillage 200³, threads=défaut, mode slices, essai 4
+[54/54] maillage 200³, threads=défaut, mode slices, essai 5
+/home/benachour-souhila/.local/lib/python3.12/site-packages/matplotlib/projections/__init__.py:63: UserWarning: Unable to import Axes3D. This may be due to multiple versions of Matplotlib being installed (e.g. as a system package and as a pip package). As a result, the 3D projection is not available.
+  warnings.warn("Unable to import Axes3D. This may be due to multiple versions of "
+
+## Coût du workflow ad-hoc
+
+| Éléments | Threads | Sans snapshots (s) | Avec snapshots (s) | Écriture snapshots (s) | Surcoût (%) | Snapshots total (Mo) | Moyenne/snapshot (Mo) | Débit écriture (Mo/s) | RAM max (Mo) | Visualisation (s) |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 50³ = 125000 | 30720 | 0.80 | 17.18 | 16.368 | 2036.8 | 716.37 | 23.88 | 43.8 | 218 | 0.76 |
+| 100³ = 1000000 | 30720 | 6.66 | 132.40 | 126.801 | 1888.5 | 5405.56 | 180.19 | 42.6 | 245 | 2.89 |
+| 200³ = 8000000 | 30720 | 52.12 | 1062.85 | 1012.817 | 1939.1 | 41823.39 | 1394.11 | 41.3 | 460 | 20.19 |
+
+## Snapshots vs slices
+
+| Éléments | Threads | Snapshots (Mo) | Slices (Mo) | Rapport taille | Écriture snap. (s) | Extraction slices (s) | Écriture slices (s) | fsync slices (s) | Rapport écriture | Image snap. (s) | Image slice (s) | Workflow snap. (s) | Workflow slice (s) |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 50³ | 30720 | 716.37 | 7.481 | ×96 | 16.368 | 0.1141 | 0.1602 | 0.0601 | ×60 | 0.76 | 0.49 | 17.94 | 1.63 |
+| 100³ | 30720 | 5405.56 | 28.598 | ×189 | 126.801 | 0.8716 | 0.6236 | 0.1137 | ×85 | 2.89 | 0.72 | 135.29 | 8.46 |
+| 200³ | 30720 | 41823.39 | 110.956 | ×377 | 1012.817 | 6.9179 | 2.5173 | 0.1292 | ×107 | 20.19 | 1.86 | 1083.03 | 61.40 |
+
+## Dispersion : médiane [min – max] sur 5 répétitions (chauffe écartée)
+
+| Éléments | Mode | Simulation (s) | Image (s) |
+|---|---|---|---|
+| 50³ | sans | 0.804 [0.792 – 0.810] | 0.000 [0.000 – 0.000] |
+| 50³ | avec | 17.182 [17.143 – 18.536] | 0.761 [0.759 – 0.765] |
+| 50³ | slices | 1.143 [1.132 – 1.154] | 0.488 [0.483 – 0.490] |
+| 100³ | sans | 6.658 [6.651 – 6.687] | 0.000 [0.000 – 0.000] |
+| 100³ | avec | 132.400 [132.311 – 132.530] | 2.889 [2.886 – 2.894] |
+| 100³ | slices | 7.738 [7.694 – 7.754] | 0.724 [0.721 – 0.741] |
+| 200³ | sans | 52.123 [52.114 – 52.160] | 0.000 [0.000 – 0.000] |
+| 200³ | avec | 1062.848 [1061.963 – 1064.854] | 20.186 [20.161 – 20.217] |
+| 200³ | slices | 59.534 [59.231 – 59.638] | 1.862 [1.858 – 1.875] |
+
+Graphique écrit : /home/benachour-souhila/Documents/m2/FUnTiDES-lite/bench_out/run_benchmark/benchmark.png
+Graphique écrit : /home/benachour-souhila/Documents/m2/FUnTiDES-lite/bench_out/run_benchmark/benchmark_slices.png
+Résultats dans : /home/benachour-souhila/Documents/m2/FUnTiDES-lite/bench_out/run_benchmark
