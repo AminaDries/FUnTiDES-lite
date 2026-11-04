@@ -1,0 +1,10 @@
+Pas communs : 30 (ad-hoc 30, in-situ 30)
+  min      ecart max 2.427e-06  (relatif 3.368e-07)
+  max      ecart max 3.383e-06  (relatif 1.320e-06)
+  mean     ecart max 2.732e-11  (relatif 9.848e-08)
+  var      ecart max 5.923e-11  (relatif 2.516e-07)
+  max_abs  ecart max 3.383e-06  (relatif 4.694e-07)
+  energie  ecart max 4.810e-04  (relatif 2.516e-07)
+Histogramme : 30 pas, 51 classes, 8120601 noeuds par pas
+  noeuds classes differemment : max 13 par pas, total 37
+  (ecarts possibles a la frontiere d'une classe : les snapshots CSV sont arrondis a l'ecriture)

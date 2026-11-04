@@ -6,6 +6,7 @@
 //************************************************************************
 
 #include "sem_proxy.h"
+#include "insitu_gpu.h"
 
 #include <cartesian_struct_builder.h>
 #include <cartesian_unstruct_builder.h>
@@ -201,6 +202,24 @@ void SEMproxy::run()
   std::vector<double> velMax(velNodes, 0.0); 
   std::vector<int> velStep(velNodes, 0);
 
+  // Mode "device" : histogramme et pics par noeud calcules sur le GPU, le champ
+  // n'est pas lu par l'hote (seuls les resultats reduits sont rapatries).
+  // Mode "host" (ou build sans Kokkos) : boucles sur l'hote, apres la sonde de copie.
+#ifdef USE_KOKKOS
+  const bool insituOnDevice = (opt_.insitu_mode == "device");
+  // Memoire du GPU seul (CudaSpace), PAS la memoire partagee (UVM) : l'hote
+  // relit les classes a chaque analyse ; en UVM la page ferait l'aller-retour
+  // et le pilote finit par la laisser cote hote -> chaque atomic_add du GPU
+  // traverse alors le PCIe (mesure : x70 sur le temps total a M).
+  using InsituMem = Kokkos::DefaultExecutionSpace::memory_space;
+  Kokkos::View<double*, InsituMem> velMaxD("velMaxD", insituOnDevice ? velNodes : 0);
+  Kokkos::View<int*, InsituMem> velStepD("velStepD", insituOnDevice ? velNodes : 0);
+  Kokkos::View<unsigned long long*, InsituMem> histD(
+      "histD", (insituOnDevice && opt_.insitu_hist) ? opt_.insitu_hist_bins + 2 : 0);
+#else
+  const bool insituOnDevice = false;
+#endif
+
   // sismos in-situ : un accumulateur par recepteur (memoire constante)
   std::vector<SeismoStream> seismoStreams(opt_.insitu_sismos ? nb_receivers_ : 0);
   double insituSismosTime = 0.0;
@@ -293,11 +312,42 @@ void SEMproxy::run()
       snapshotCount++;
   }
   
+    // Sonde (sujet) : temps de la copie GPU -> hote, isole du calcul. Avec la
+    // memoire partagee, les pages migrent a la 1re lecture du champ par le CPU :
+    // on fait cette 1re lecture ici, avant toutes les analyses sur l'hote
+    // (pics, histogramme, stats), et on la chronometre seule.
+    const bool insituStep =
+        (opt_.insitu_stats || opt_.insitu_hist || opt_.insitu_vel) &&
+        indexTimeSample % opt_.insitu_interval == 0;
+    if (insituStep && !insituOnDevice && opt_.insitu_mode == "host")
+    {
+#ifdef USE_KOKKOS
+      Kokkos::fence();
+#endif
+      const auto startCopy = std::chrono::steady_clock::now();
+      double touch = 0.0;
+      for (int n = 0; n < m_mesh->getNumberOfNodes(); n++)
+        touch += solverData.m_pnGlobal(n, i1);
+      touchSink_ += touch;
+      insitu_copy_s_ += std::chrono::duration<double>(
+                            std::chrono::steady_clock::now() - startCopy)
+                            .count();
+    }
+
     const auto tVel0 = std::chrono::steady_clock::now();
     if (opt_.insitu_vel && indexTimeSample % opt_.insitu_interval == 0)
     {
 #ifdef USE_KOKKOS
       Kokkos::fence();
+      if (insituOnDevice)
+      {
+        Kokkos::parallel_for(
+            "insitu_vel", static_cast<int>(velNodes),
+            PeakPerNode<arrayReal, decltype(velMaxD), decltype(velStepD)>{
+                solverData.m_pnGlobal, i1, velMaxD, velStepD, indexTimeSample});
+        Kokkos::fence();  // annexe 1 : fin reelle du calcul avant le chrono
+      }
+      else
 #endif
       for (std::size_t n = 0; n < velNodes; ++n)
       {
@@ -318,11 +368,31 @@ void SEMproxy::run()
 
     if (opt_.insitu_hist && indexTimeSample % opt_.insitu_interval == 0)
     {
-#ifdef USE_KOKKOS
-      Kokkos::fence();
-#endif
       StreamHistogram h;
       h.init(opt_.insitu_hist_bound, opt_.insitu_hist_bins);
+#ifdef USE_KOKKOS
+      Kokkos::fence();
+      if (insituOnDevice)
+      {
+        Kokkos::deep_copy(histD, 0ULL);
+        using HistFunctor = HistogramTeam<arrayReal, decltype(histD)>;
+        const int nnodes = m_mesh->getNumberOfNodes();
+        const int chunk = 8192;  // noeuds par equipe
+        const int nk = opt_.insitu_hist_bins + 2;
+        Kokkos::TeamPolicy<> policy((nnodes + chunk - 1) / chunk, Kokkos::AUTO);
+        Kokkos::parallel_for(
+            "insitu_hist",
+            policy.set_scratch_size(
+                0, Kokkos::PerTeam(HistFunctor::scratch_view::shmem_size(nk))),
+            HistFunctor{solverData.m_pnGlobal, i1, opt_.insitu_hist_bound,
+                        opt_.insitu_hist_bins, nnodes, chunk, histD});
+        Kokkos::fence();
+        // seules les nbins + 2 classes reviennent sur l'hote
+        auto histH = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), histD);
+        for (int k = 0; k < opt_.insitu_hist_bins + 2; ++k) h.counts[k] = histH(k);
+      }
+      else
+#endif
       for (int n = 0; n < m_mesh->getNumberOfNodes(); ++n)
       {
         h.add(solverData.m_pnGlobal(n, i1));
@@ -338,25 +408,12 @@ void SEMproxy::run()
     if (opt_.insitu_stats && indexTimeSample % opt_.insitu_interval == 0)
     {
       const auto startInsitu = std::chrono::steady_clock::now();
-      if (opt_.insitu_mode == "host")
-      {
-        // sonde (sujet) : temps de la copie GPU -> hote, isole du calcul.
-        // Les tableaux sont en memoire partagee : les pages migrent vers
-        // l'hote a la 1re lecture par le CPU. On chronometre cette lecture.
-        Kokkos::fence();
-        const auto startCopy = std::chrono::steady_clock::now();
-        double touch = 0.0;
-        for (int n = 0; n < m_mesh->getNumberOfNodes(); n++)
-          touch += solverData.m_pnGlobal(n, i1);
-        touchSink_ += touch;
-        insitu_copy_s_ += std::chrono::duration<double>(
-                              std::chrono::steady_clock::now() - startCopy)
-                              .count();
-      }
-            const RunningStats s =
+      const RunningStats s =
           (opt_.insitu_mode == "host") ? computeStatsHost(solverData.m_pnGlobal)
                                        : computeStatsDevice(solverData.m_pnGlobal);
+#ifdef USE_KOKKOS
       Kokkos::fence();  // annexe 1 : fin reelle de l'analyse avant d'arreter le chrono
+#endif
       const double sec = std::chrono::duration<double>(
                              std::chrono::steady_clock::now() - startInsitu)
                              .count();
@@ -387,6 +444,19 @@ void SEMproxy::run()
   }
   
   const auto tWrite0 = std::chrono::steady_clock::now();
+#ifdef USE_KOKKOS
+  if (opt_.insitu_vel && insituOnDevice)
+  {
+    Kokkos::fence();
+    auto maxH = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), velMaxD);
+    auto stepH = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), velStepD);
+    for (std::size_t n = 0; n < velNodes; ++n)
+    {
+      velMax[n] = maxH(n);
+      velStep[n] = stepH(n);
+    }
+  }
+#endif
   if (opt_.insitu_vel)
   {
     std::ofstream vf(opt_.insitu_vel_file);
@@ -429,12 +499,22 @@ void SEMproxy::run()
     std::cout << "---- In-situ analysis time : " << insituTime << " seconds ("
               << insituRecords.size() << " analyses, mode " << opt_.insitu_mode
               << ")." << std::endl;
+    // Volume GPU -> hote par analyse (valeur calculee, pas mesuree) :
+    //  - host   : tout le champ migre (une fois, quelle que soit l'analyse) ;
+    //  - device : seulement les resultats reduits (stats + classes de
+    //             l'histogramme) ; les pics par noeud reviennent une fois, a la fin.
+    const std::size_t nbNodes = static_cast<std::size_t>(m_mesh->getNumberOfNodes());
     const std::size_t bytesPerAnalysis =
-        (opt_.insitu_mode == "host")
-            ? static_cast<std::size_t>(m_mesh->getNumberOfNodes()) * sizeof(float)
-            : sizeof(RunningStats);
+        insituOnDevice
+            ? sizeof(RunningStats) +
+                  (opt_.insitu_hist ? (opt_.insitu_hist_bins + 2) * sizeof(unsigned long long) : 0)
+            : nbNodes * sizeof(float);
     std::cout << "---- Data moved to host    : " << bytesPerAnalysis
               << " bytes per analysis." << std::endl;
+    if (insituOnDevice && opt_.insitu_vel)
+      std::cout << "---- Peaks moved to host   : "
+                << nbNodes * (sizeof(double) + sizeof(int))
+                << " bytes, once at the end." << std::endl;
     }
 
   if (opt_.fsync_snapshots)
@@ -558,7 +638,9 @@ std::size_t SEMproxy::saveSnapshot(int timestep, const arrayReal& field)
 {
   {
     // sonde (sujet) : 1re lecture du champ par le CPU = migration GPU -> hote
+#ifdef USE_KOKKOS
     Kokkos::fence();
+#endif
     const auto startCopy = std::chrono::steady_clock::now();
     double touch = 0.0;
     for (int n = 0; n < m_mesh->getNumberOfNodes(); n++) touch += field(n, i1);

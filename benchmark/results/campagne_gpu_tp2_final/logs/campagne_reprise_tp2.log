@@ -1,0 +1,262 @@
+nohup: les entrées sont ignorées
+=== debut : mar. 03 nov. 2026 22:15:09 CET
+=== commit : 7777beb (branche fix/tp2-mesures)
+NVIDIA GeForce RTX 5050 Laptop GPU, 595.99.02
+Sys. de fichiers                  Taille Utilisé Dispo Uti% Monté sur
+/dev/mapper/ubuntu--vg-ubuntu--lv   935G    230G  659G  26% /
+=== 1. S (50) in-situ : mar. 03 nov. 2026 22:15:10 CET
+Systeme de fichiers : /dev/mapper/ubuntu--vg-ubuntu--lv ext4   980211368 240319296  690026344  26% /
+[S=50] mode=insitu run=1/5
+[S=50] mode=insitu run=2/5
+[S=50] mode=insitu run=3/5
+[S=50] mode=insitu run=4/5
+[S=50] mode=insitu run=5/5
+[S=50] mode=insitu_fsync run=1/5
+[S=50] mode=insitu_fsync run=2/5
+[S=50] mode=insitu_fsync run=3/5
+[S=50] mode=insitu_fsync run=4/5
+[S=50] mode=insitu_fsync run=5/5
+
+# Resume des mesures
+
+- machine : benachour-souhila-LOQ-15IRX10 (inconnu, 20 threads logiques, OMP_NUM_THREADS=20)
+- GPU : NVIDIA GeForce RTX 5050 Laptop GPU, 8151 MiB, 595.99.02
+- systeme de fichiers : `/dev/mapper/ubuntu--vg-ubuntu--lv ext4   980211368 240319296  690026344  26% /`
+- commit : `7777beb9716bb7198a6ca802e5ce7be4892374c1` (modifications non commitees : True)
+- repetitions : 5 ; mediane [min ; max]
+
+## S (50^3 elements)
+
+| mode | runs | total (s) | calcul (s) | ecriture snapshots (s) | dont fsync (s) | in-situ stats (s) | in-situ hist (s) | in-situ vitesse (s) | ecriture in-situ (s) | copie GPU->hote snapshots (s) | copie GPU->hote in-situ (s) | Python ad-hoc (s) | volume ecrit |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| insitu | 5 | 1.565 [1.553 ; 1.590] | 0.543 [0.542 ; 0.575] | 0.000 [0.000 ; 0.000] | 0.000 [0.000 ; 0.000] | 0.011 [0.011 ; 0.012] | 0.007 [0.007 ; 0.007] | 0.002 [0.002 ; 0.002] | 0.730 [0.729 ; 0.737] | 0.000 [0.000 ; 0.000] | 0.000 [0.000 ; 0.000] | - | 32.93 Mo |
+| insitu_fsync | 5 | 1.566 [1.556 ; 1.586] | 0.543 [0.542 ; 0.544] | 0.000 [0.000 ; 0.000] | 0.000 [0.000 ; 0.000] | 0.011 [0.011 ; 0.011] | 0.007 [0.007 ; 0.007] | 0.002 [0.002 ; 0.002] | 0.740 [0.738 ; 0.741] | 0.000 [0.000 ; 0.000] | 0.000 [0.000 ; 0.000] | - | 32.93 Mo |
+
+Notes : 'total' = duree de la simulation vue de l'exterieur (sans les scripts Python). Le cout d'un workflow ad-hoc = total + Python ad-hoc. Sans `fsync`, le temps d'ecriture est celui vu par l'application (copie dans le cache du systeme) ; avec `fsync` c'est le temps de persistance.
+
+Donnees brutes : /home/benachour-souhila/Documents/m2/FUnTiDES-lite/bench_out/S_insitu/runs.csv
+=== 2. M (100) in-situ : mar. 03 nov. 2026 22:15:26 CET
+Systeme de fichiers : /dev/mapper/ubuntu--vg-ubuntu--lv ext4   980211368 240383844  689961796  26% /
+[M=100] mode=insitu run=1/5
+[M=100] mode=insitu run=2/5
+[M=100] mode=insitu run=3/5
+[M=100] mode=insitu run=4/5
+[M=100] mode=insitu run=5/5
+[M=100] mode=insitu_fsync run=1/5
+[M=100] mode=insitu_fsync run=2/5
+[M=100] mode=insitu_fsync run=3/5
+[M=100] mode=insitu_fsync run=4/5
+[M=100] mode=insitu_fsync run=5/5
+
+# Resume des mesures
+
+- machine : benachour-souhila-LOQ-15IRX10 (inconnu, 20 threads logiques, OMP_NUM_THREADS=20)
+- GPU : NVIDIA GeForce RTX 5050 Laptop GPU, 8151 MiB, 595.99.02
+- systeme de fichiers : `/dev/mapper/ubuntu--vg-ubuntu--lv ext4   980211368 240383844  689961796  26% /`
+- commit : `7777beb9716bb7198a6ca802e5ce7be4892374c1` (modifications non commitees : True)
+- repetitions : 5 ; mediane [min ; max]
+
+## M (100^3 elements)
+
+| mode | runs | total (s) | calcul (s) | ecriture snapshots (s) | dont fsync (s) | in-situ stats (s) | in-situ hist (s) | in-situ vitesse (s) | ecriture in-situ (s) | copie GPU->hote snapshots (s) | copie GPU->hote in-situ (s) | Python ad-hoc (s) | volume ecrit |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| insitu | 5 | 12.581 [12.565 ; 12.620] | 6.286 [6.253 ; 6.292] | 0.000 [0.000 ; 0.000] | 0.000 [0.000 ; 0.000] | 0.090 [0.088 ; 0.090] | 0.062 [0.061 ; 0.063] | 0.014 [0.014 ; 0.015] | 5.742 [5.734 ; 5.766] | 0.000 [0.000 ; 0.000] | 0.000 [0.000 ; 0.000] | - | 259.52 Mo |
+| insitu_fsync | 5 | 12.607 [12.584 ; 12.631] | 6.292 [6.284 ; 6.292] | 0.000 [0.000 ; 0.000] | 0.000 [0.000 ; 0.000] | 0.090 [0.090 ; 0.090] | 0.062 [0.062 ; 0.063] | 0.014 [0.014 ; 0.015] | 5.766 [5.759 ; 5.785] | 0.000 [0.000 ; 0.000] | 0.000 [0.000 ; 0.000] | - | 259.52 Mo |
+
+Notes : 'total' = duree de la simulation vue de l'exterieur (sans les scripts Python). Le cout d'un workflow ad-hoc = total + Python ad-hoc. Sans `fsync`, le temps d'ecriture est celui vu par l'application (copie dans le cache du systeme) ; avec `fsync` c'est le temps de persistance.
+
+Donnees brutes : /home/benachour-souhila/Documents/m2/FUnTiDES-lite/bench_out/M_insitu/runs.csv
+=== 3. L (200) in-situ : mar. 03 nov. 2026 22:17:33 CET
+Sys. de fichiers                  Taille Utilisé Dispo Uti% Monté sur
+/dev/mapper/ubuntu--vg-ubuntu--lv   935G    230G  658G  26% /
+Systeme de fichiers : /dev/mapper/ubuntu--vg-ubuntu--lv ext4   980211368 240891100  689454540  26% /
+[L=200] mode=insitu run=1/5
+[L=200] mode=insitu run=2/5
+[L=200] mode=insitu run=3/5
+[L=200] mode=insitu run=4/5
+[L=200] mode=insitu run=5/5
+[L=200] mode=insitu_fsync run=1/5
+[L=200] mode=insitu_fsync run=2/5
+[L=200] mode=insitu_fsync run=3/5
+[L=200] mode=insitu_fsync run=4/5
+[L=200] mode=insitu_fsync run=5/5
+[L=200] mode=insitu_host run=1/5
+[L=200] mode=insitu_host run=2/5
+[L=200] mode=insitu_host run=3/5
+[L=200] mode=insitu_host run=4/5
+[L=200] mode=insitu_host run=5/5
+
+# Resume des mesures
+
+- machine : benachour-souhila-LOQ-15IRX10 (inconnu, 20 threads logiques, OMP_NUM_THREADS=20)
+- GPU : NVIDIA GeForce RTX 5050 Laptop GPU, 8151 MiB, 595.99.02
+- systeme de fichiers : `/dev/mapper/ubuntu--vg-ubuntu--lv ext4   980211368 240891100  689454540  26% /`
+- commit : `7777beb9716bb7198a6ca802e5ce7be4892374c1` (modifications non commitees : True)
+- repetitions : 5 ; mediane [min ; max]
+
+## L (200^3 elements)
+
+| mode | runs | total (s) | calcul (s) | ecriture snapshots (s) | dont fsync (s) | in-situ stats (s) | in-situ hist (s) | in-situ vitesse (s) | ecriture in-situ (s) | copie GPU->hote snapshots (s) | copie GPU->hote in-situ (s) | Python ad-hoc (s) | volume ecrit |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| insitu | 5 | 99.131 [98.973 ; 101.333] | 50.630 [50.520 ; 50.825] | 0.000 [0.000 ; 0.000] | 0.000 [0.000 ; 0.000] | 0.605 [0.598 ; 0.616] | 0.487 [0.482 ; 0.498] | 0.105 [0.105 ; 0.108] | 45.659 [45.574 ; 47.959] | 0.000 [0.000 ; 0.000] | 0.000 [0.000 ; 0.000] | - | 2060.22 Mo |
+| insitu_fsync | 5 | 99.146 [99.047 ; 99.391] | 50.590 [50.525 ; 50.627] | 0.000 [0.000 ; 0.000] | 0.000 [0.000 ; 0.000] | 0.604 [0.596 ; 0.609] | 0.496 [0.488 ; 0.497] | 0.107 [0.105 ; 0.108] | 45.722 [45.676 ; 46.048] | 0.000 [0.000 ; 0.000] | 0.000 [0.000 ; 0.000] | - | 2060.22 Mo |
+| insitu_host | 5 | 112.094 [112.065 ; 112.196] | 48.093 [48.054 ; 48.152] | 0.000 [0.000 ; 0.000] | 0.000 [0.000 ; 0.000] | 7.813 [7.811 ; 7.814] | 3.786 [3.785 ; 3.795] | 1.518 [1.517 ; 1.530] | 45.357 [45.309 ; 45.426] | 0.000 [0.000 ; 0.000] | 3.958 [3.956 ; 3.963] | - | 2060.22 Mo |
+
+Notes : 'total' = duree de la simulation vue de l'exterieur (sans les scripts Python). Le cout d'un workflow ad-hoc = total + Python ad-hoc. Sans `fsync`, le temps d'ecriture est celui vu par l'application (copie dans le cache du systeme) ; avec `fsync` c'est le temps de persistance.
+
+Donnees brutes : /home/benachour-souhila/Documents/m2/FUnTiDES-lite/bench_out/L_insitu/runs.csv
+=== 4. L (200) Python ad-hoc, une fois : mar. 03 nov. 2026 22:43:33 CET
+Systeme de fichiers : /dev/mapper/ubuntu--vg-ubuntu--lv ext4   980211368 246925248  683420392  27% /
+[L=200] mode=adhoc run=1/1
+
+# Resume des mesures
+
+- machine : benachour-souhila-LOQ-15IRX10 (inconnu, 20 threads logiques, OMP_NUM_THREADS=20)
+- GPU : NVIDIA GeForce RTX 5050 Laptop GPU, 8151 MiB, 595.99.02
+- systeme de fichiers : `/dev/mapper/ubuntu--vg-ubuntu--lv ext4   980211368 246925248  683420392  27% /`
+- commit : `7777beb9716bb7198a6ca802e5ce7be4892374c1` (modifications non commitees : True)
+- repetitions : 1 ; mediane [min ; max]
+
+## L (200^3 elements)
+
+| mode | runs | total (s) | calcul (s) | ecriture snapshots (s) | dont fsync (s) | in-situ stats (s) | in-situ hist (s) | in-situ vitesse (s) | ecriture in-situ (s) | copie GPU->hote snapshots (s) | copie GPU->hote in-situ (s) | Python ad-hoc (s) | volume ecrit |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| adhoc | 1, lectures chaud | 1061.416 [1061.416 ; 1061.416] | 48.978 [48.978 ; 48.978] | 1011.385 [1011.385 ; 1011.385] | 0.000 [0.000 ; 0.000] | 0.000 [0.000 ; 0.000] | 0.000 [0.000 ; 0.000] | 0.000 [0.000 ; 0.000] | 0.000 [0.000 ; 0.000] | 3.963 [3.963 ; 3.963] | 0.000 [0.000 ; 0.000] | 1030.806 [1030.806 ; 1030.806] | 41823.41 Mo |
+
+Notes : 'total' = duree de la simulation vue de l'exterieur (sans les scripts Python). Le cout d'un workflow ad-hoc = total + Python ad-hoc. Sans `fsync`, le temps d'ecriture est celui vu par l'application (copie dans le cache du systeme) ; avec `fsync` c'est le temps de persistance.
+
+Donnees brutes : /home/benachour-souhila/Documents/m2/FUnTiDES-lite/bench_out/L_python/runs.csv
+=== 5. Vitesse in-situ a L : mar. 03 nov. 2026 23:18:30 CET
+fichier : bench_out/L_insitu/L/insitu/run1/insitu_vel.csv
+30 analyses, 64481201 nœuds, source en [1000. 1000. 1000.]
+Nœuds gardés : 62204819 (distance entre 150 m et 1500 m)
+Vitesse estimée : 991 m/s   (modèle : 1500 m/s, écart -34.0 %)
+Instant d'émission apparent : -0.075 s
+=== 6. Precision meme run (M) : mar. 03 nov. 2026 23:18:52 CET
+/home/benachour-souhila/.local/lib/python3.12/site-packages/matplotlib/projections/__init__.py:63: UserWarning: Unable to import Axes3D. This may be due to multiple versions of Matplotlib being installed (e.g. as a system package and as a pip package). As a result, the 3D projection is not available.
+  warnings.warn("Unable to import Axes3D. This may be due to multiple versions of "
+/home/benachour-souhila/.local/lib/python3.12/site-packages/matplotlib/projections/__init__.py:63: UserWarning: Unable to import Axes3D. This may be due to multiple versions of Matplotlib being installed (e.g. as a system package and as a pip package). As a result, the 3D projection is not available.
+  warnings.warn("Unable to import Axes3D. This may be due to multiple versions of "
+Pas communs : 30 (ad-hoc 30, in-situ 30)
+  min      ecart max 2.427e-06  (relatif 3.368e-07)
+  max      ecart max 3.383e-06  (relatif 1.320e-06)
+  mean     ecart max 2.732e-11  (relatif 9.848e-08)
+  var      ecart max 5.923e-11  (relatif 2.516e-07)
+  max_abs  ecart max 3.383e-06  (relatif 4.694e-07)
+  energie  ecart max 4.810e-04  (relatif 2.516e-07)
+Histogramme : 30 pas, 51 classes, 8120601 noeuds par pas
+  noeuds classes differemment : max 13 par pas, total 37
+  (ecarts possibles a la frontiere d'une classe : les snapshots CSV sont arrondis a l'ecriture)
+=== 7. run_benchmark S M L : mar. 03 nov. 2026 23:22:16 CET
+Sys. de fichiers                  Taille Utilisé Dispo Uti% Monté sur
+/dev/mapper/ubuntu--vg-ubuntu--lv   935G    236G  652G  27% /
+[1/54] maillage 50³, threads=défaut, mode sans, chauffe
+[2/54] maillage 50³, threads=défaut, mode sans, essai 1
+[3/54] maillage 50³, threads=défaut, mode sans, essai 2
+[4/54] maillage 50³, threads=défaut, mode sans, essai 3
+[5/54] maillage 50³, threads=défaut, mode sans, essai 4
+[6/54] maillage 50³, threads=défaut, mode sans, essai 5
+[7/54] maillage 50³, threads=défaut, mode avec, chauffe
+[8/54] maillage 50³, threads=défaut, mode avec, essai 1
+[9/54] maillage 50³, threads=défaut, mode avec, essai 2
+[10/54] maillage 50³, threads=défaut, mode avec, essai 3
+[11/54] maillage 50³, threads=défaut, mode avec, essai 4
+[12/54] maillage 50³, threads=défaut, mode avec, essai 5
+[13/54] maillage 50³, threads=défaut, mode slices, chauffe
+[14/54] maillage 50³, threads=défaut, mode slices, essai 1
+[15/54] maillage 50³, threads=défaut, mode slices, essai 2
+[16/54] maillage 50³, threads=défaut, mode slices, essai 3
+[17/54] maillage 50³, threads=défaut, mode slices, essai 4
+[18/54] maillage 50³, threads=défaut, mode slices, essai 5
+[19/54] maillage 100³, threads=défaut, mode sans, chauffe
+[20/54] maillage 100³, threads=défaut, mode sans, essai 1
+[21/54] maillage 100³, threads=défaut, mode sans, essai 2
+[22/54] maillage 100³, threads=défaut, mode sans, essai 3
+[23/54] maillage 100³, threads=défaut, mode sans, essai 4
+[24/54] maillage 100³, threads=défaut, mode sans, essai 5
+[25/54] maillage 100³, threads=défaut, mode avec, chauffe
+[26/54] maillage 100³, threads=défaut, mode avec, essai 1
+[27/54] maillage 100³, threads=défaut, mode avec, essai 2
+[28/54] maillage 100³, threads=défaut, mode avec, essai 3
+[29/54] maillage 100³, threads=défaut, mode avec, essai 4
+[30/54] maillage 100³, threads=défaut, mode avec, essai 5
+[31/54] maillage 100³, threads=défaut, mode slices, chauffe
+[32/54] maillage 100³, threads=défaut, mode slices, essai 1
+[33/54] maillage 100³, threads=défaut, mode slices, essai 2
+[34/54] maillage 100³, threads=défaut, mode slices, essai 3
+[35/54] maillage 100³, threads=défaut, mode slices, essai 4
+[36/54] maillage 100³, threads=défaut, mode slices, essai 5
+[37/54] maillage 200³, threads=défaut, mode sans, chauffe
+[38/54] maillage 200³, threads=défaut, mode sans, essai 1
+[39/54] maillage 200³, threads=défaut, mode sans, essai 2
+[40/54] maillage 200³, threads=défaut, mode sans, essai 3
+[41/54] maillage 200³, threads=défaut, mode sans, essai 4
+[42/54] maillage 200³, threads=défaut, mode sans, essai 5
+[43/54] maillage 200³, threads=défaut, mode avec, chauffe
+[44/54] maillage 200³, threads=défaut, mode avec, essai 1
+[45/54] maillage 200³, threads=défaut, mode avec, essai 2
+[46/54] maillage 200³, threads=défaut, mode avec, essai 3
+[47/54] maillage 200³, threads=défaut, mode avec, essai 4
+[48/54] maillage 200³, threads=défaut, mode avec, essai 5
+[49/54] maillage 200³, threads=défaut, mode slices, chauffe
+[50/54] maillage 200³, threads=défaut, mode slices, essai 1
+[51/54] maillage 200³, threads=défaut, mode slices, essai 2
+[52/54] maillage 200³, threads=défaut, mode slices, essai 3
+[53/54] maillage 200³, threads=défaut, mode slices, essai 4
+[54/54] maillage 200³, threads=défaut, mode slices, essai 5
+/home/benachour-souhila/.local/lib/python3.12/site-packages/matplotlib/projections/__init__.py:63: UserWarning: Unable to import Axes3D. This may be due to multiple versions of Matplotlib being installed (e.g. as a system package and as a pip package). As a result, the 3D projection is not available.
+  warnings.warn("Unable to import Axes3D. This may be due to multiple versions of "
+
+## Coût du workflow ad-hoc
+
+| Éléments | Threads | Sans snapshots (s) | Avec snapshots (s) | Écriture snapshots (s) | Surcoût (%) | Snapshots total (Mo) | Moyenne/snapshot (Mo) | Débit écriture (Mo/s) | RAM max (Mo) | Visualisation (s) |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 50³ = 125000 | 30720 | 0.80 | 17.18 | 16.368 | 2036.8 | 716.37 | 23.88 | 43.8 | 218 | 0.76 |
+| 100³ = 1000000 | 30720 | 6.66 | 132.40 | 126.801 | 1888.5 | 5405.56 | 180.19 | 42.6 | 245 | 2.89 |
+| 200³ = 8000000 | 30720 | 52.12 | 1062.85 | 1012.817 | 1939.1 | 41823.39 | 1394.11 | 41.3 | 460 | 20.19 |
+
+## Snapshots vs slices
+
+| Éléments | Threads | Snapshots (Mo) | Slices (Mo) | Rapport taille | Écriture snap. (s) | Extraction slices (s) | Écriture slices (s) | fsync slices (s) | Rapport écriture | Image snap. (s) | Image slice (s) | Workflow snap. (s) | Workflow slice (s) |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 50³ | 30720 | 716.37 | 7.481 | ×96 | 16.368 | 0.1141 | 0.1602 | 0.0601 | ×60 | 0.76 | 0.49 | 17.94 | 1.63 |
+| 100³ | 30720 | 5405.56 | 28.598 | ×189 | 126.801 | 0.8716 | 0.6236 | 0.1137 | ×85 | 2.89 | 0.72 | 135.29 | 8.46 |
+| 200³ | 30720 | 41823.39 | 110.956 | ×377 | 1012.817 | 6.9179 | 2.5173 | 0.1292 | ×107 | 20.19 | 1.86 | 1083.03 | 61.40 |
+
+## Dispersion : médiane [min – max] sur 5 répétitions (chauffe écartée)
+
+| Éléments | Mode | Simulation (s) | Image (s) |
+|---|---|---|---|
+| 50³ | sans | 0.804 [0.792 – 0.810] | 0.000 [0.000 – 0.000] |
+| 50³ | avec | 17.182 [17.143 – 18.536] | 0.761 [0.759 – 0.765] |
+| 50³ | slices | 1.143 [1.132 – 1.154] | 0.488 [0.483 – 0.490] |
+| 100³ | sans | 6.658 [6.651 – 6.687] | 0.000 [0.000 – 0.000] |
+| 100³ | avec | 132.400 [132.311 – 132.530] | 2.889 [2.886 – 2.894] |
+| 100³ | slices | 7.738 [7.694 – 7.754] | 0.724 [0.721 – 0.741] |
+| 200³ | sans | 52.123 [52.114 – 52.160] | 0.000 [0.000 – 0.000] |
+| 200³ | avec | 1062.848 [1061.963 – 1064.854] | 20.186 [20.161 – 20.217] |
+| 200³ | slices | 59.534 [59.231 – 59.638] | 1.862 [1.858 – 1.875] |
+
+Graphique écrit : /home/benachour-souhila/Documents/m2/FUnTiDES-lite/bench_out/run_benchmark/benchmark.png
+Graphique écrit : /home/benachour-souhila/Documents/m2/FUnTiDES-lite/bench_out/run_benchmark/benchmark_slices.png
+Résultats dans : /home/benachour-souhila/Documents/m2/FUnTiDES-lite/bench_out/run_benchmark
+=== tailles des resultats
+152K	bench_out/L
+5,8G	bench_out/L_insitu
+4,0K	bench_out/L_insitu.log
+4,0K	bench_out/L.log
+156K	bench_out/L_python
+4,0K	bench_out/L_python.log
+745M	bench_out/M
+496M	bench_out/M_insitu
+4,0K	bench_out/M_insitu.log
+4,0K	bench_out/M.log
+88K	bench_out/precision_M
+240K	bench_out/run_benchmark
+8,0K	bench_out/run_benchmark.log
+96M	bench_out/S
+64M	bench_out/S_insitu
+4,0K	bench_out/S_insitu.log
+4,0K	bench_out/S.log
+4,0K	bench_out/vitesse_insitu_L.txt
+=== fin : mer. 04 nov. 2026 01:39:13 CET
