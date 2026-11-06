@@ -94,6 +94,8 @@ class SEMproxy
   std::size_t saveSlice(int timestep, const arrayReal& field,
                         double& extractTime, double& writeTime,
                         double& fsyncTime);
+  void initSliceImage();                      // table pixel -> noeud (une fois)
+  std::size_t saveSliceImage(int timestep, const arrayReal& field);
   void writeMetrics(double computeTime, double snapshotWriteTime,
                     int snapshotCount, std::size_t snapshotBytes,
                     double seismoWriteTime, std::size_t seismoBytes,
@@ -146,6 +148,19 @@ class SEMproxy
   std::string slice_axis_;
   float slice_pos_;
   std::string slice_folder_;
+
+  
+  // images PPM des slices (TP3, partie 1)
+  bool is_slice_image_ = false;
+  int img_w_ = 0, img_h_ = 0;          // taille de l'image en pixels
+  std::vector<int> pix2node_;          // pour chaque pixel : numero du noeud
+  float img_running_max_ = 0.f;        // max |p| vu jusqu'ici (norm running)
+  double image_init_s_ = 0.0;          // temps de construction de la table
+  double image_extract_s_ = 0.0;       // temps lecture du champ + couleurs
+  double image_write_s_ = 0.0;         // temps d'ecriture PPM
+  double image_fsync_s_ = 0.0;         // temps du fsync
+  int image_count_ = 0;                // nombre d'images ecrites
+  std::size_t image_bytes_ = 0;        // octets ecrits au total
 
   // physics
   bool isElastic_;
