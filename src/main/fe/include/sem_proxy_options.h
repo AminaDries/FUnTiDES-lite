@@ -34,7 +34,8 @@ class SemProxyOptions
   bool snapshots = false;                 
   int snap_interval = 20;                 
   std::string snap_folder = "snapshots";
-  std::string snap_format = "csv";     
+  std::string snap_format = "csv";
+  std::string quant_where = "device";     
 
   // slices
   bool slices = false;                    // faut-il sauvegarder des slices?
@@ -70,8 +71,11 @@ class SemProxyOptions
       throw std::runtime_error("lx/ly/lz must be > 0");
     if (snap_interval <= 0)
       throw std::runtime_error("snap-interval must be > 0");
-    if (snap_format != "csv" && snap_format != "bin")
-      throw std::runtime_error("snap-format must be csv or bin");
+    if (snap_format != "csv" && snap_format != "bin" && snap_format != "f16" &&
+        snap_format != "q8" && snap_format != "q16")
+      throw std::runtime_error("snap-format must be csv, bin, f16, q8 or q16");
+    if (quant_where != "device" && quant_where != "host")
+      throw std::runtime_error("quant-where must be device or host");
     if (insitu_interval <= 0)                                          
       throw std::runtime_error("insitu-interval must be > 0"); 
         if (insitu_mode != "device" && insitu_mode != "host")
@@ -130,8 +134,10 @@ class SemProxyOptions
         "snap-folder", "Folder where snapshots are written",
         // cxxopts::value<std::string>(o.snap_folder));
         cxxopts::value<std::string>(o.snap_folder))(
-        "snap-format", "Snapshot format: csv | bin (binary float32)",
+        "snap-format", "Snapshot format: csv | bin (float32) | f16 | q8 | q16",
         cxxopts::value<std::string>(o.snap_format))(
+        "quant-where", "Where f16/q8/q16 encoding runs: device | host",
+        cxxopts::value<std::string>(o.quant_where))(
         "slices", "Save a 2D slice of the wave field (CSV)",
         cxxopts::value<bool>(o.slices))(
         "slice-axis", "Axis perpendicular to the slice: x|y|z",

@@ -8,6 +8,7 @@
 #include "sem_proxy.h"
 #include "insitu_gpu.h"
 #include "field_codec.h"
+#include "field_codec_gpu.h"
 
 #include <cartesian_struct_builder.h>
 #include <cartesian_unstruct_builder.h>
@@ -634,6 +635,10 @@ void SEMproxy::run()
 // Écrit un snapshot : un fichier CSV avec la pression de tous les noeuds
 std::size_t SEMproxy::saveSnapshot(int timestep, const arrayReal& field)
 {
+  const bool encodeOnDevice = opt_.snap_format != "csv" &&
+                              opt_.snap_format != "bin" &&
+                              opt_.quant_where == "device";
+  if (!encodeOnDevice)
   {
     // sonde (sujet) : 1re lecture du champ par le CPU = migration GPU -> hote
 #ifdef USE_KOKKOS
@@ -647,7 +652,7 @@ std::size_t SEMproxy::saveSnapshot(int timestep, const arrayReal& field)
                              std::chrono::steady_clock::now() - startCopy)
                              .count();
   }
-  if (opt_.snap_format == "bin") return saveSnapshotBin(timestep, field);
+  if (opt_.snap_format != "csv") return saveSnapshotBin(timestep, field);
   std::ostringstream name;
   name << snap_folder_ << "/snapshot_" << std::setw(6) << std::setfill('0')
        << timestep << ".csv";
@@ -683,11 +688,12 @@ std::size_t SEMproxy::saveSnapshot(int timestep, const arrayReal& field)
 std::size_t SEMproxy::saveSnapshotBin(int timestep, const arrayReal& field)
 {
   const int nbNodes = m_mesh->getNumberOfNodes();
+  const std::size_t N = static_cast<std::size_t>(nbNodes);
   std::size_t bytes = 0;
 
   if (!snapCoordsWritten_)
   {
-    std::vector<float> xyz(3 * static_cast<std::size_t>(nbNodes));
+    std::vector<float> xyz(3 * N);
     for (int n = 0; n < nbNodes; n++)
       for (int d = 0; d < 3; d++)
         xyz[3 * static_cast<std::size_t>(n) + d] =
@@ -707,8 +713,141 @@ std::size_t SEMproxy::saveSnapshotBin(int timestep, const arrayReal& field)
     snapCoordsWritten_ = true;
   }
 
-  std::vector<float> values(static_cast<std::size_t>(nbNodes));
-  for (int n = 0; n < nbNodes; n++) values[n] = field(n, i1);
+  const std::string& fmt = opt_.snap_format;
+  field_codec::Codec codec = field_codec::RAW_F32;
+  std::uint32_t nbits = 32;
+  float vmin = 0.f, vmax = 0.f;
+#ifdef USE_KOKKOS
+  const bool onDevice = (fmt != "bin") && (opt_.quant_where == "device");
+#else
+  const bool onDevice = false;
+#endif
+  const int col = i1;
+
+  std::vector<float> rawHost;
+  std::vector<std::uint8_t> host8;
+  std::vector<std::uint16_t> host16;
+#ifdef USE_KOKKOS
+  Kokkos::View<std::uint8_t*, MemSpace> dev8;
+  Kokkos::View<std::uint16_t*, MemSpace> dev16;
+#endif
+  const char* payload = nullptr;
+  std::size_t payloadBytes = 0;
+
+  const auto tEnc0 = std::chrono::steady_clock::now();
+  if (fmt == "bin")
+  {
+    rawHost.resize(N);
+    for (int n = 0; n < nbNodes; n++) rawHost[n] = field(n, col);
+    payload = reinterpret_cast<const char*>(rawHost.data());
+    payloadBytes = N * sizeof(float);
+  }
+  else
+  {
+    std::uint32_t levels = 0;
+    float scale = 0.f;
+    if (fmt == "f16")
+    {
+      codec = field_codec::F16;
+      nbits = 16;
+    }
+    else
+    {
+      codec = field_codec::QUANT;
+      nbits = (fmt == "q8") ? 8u : 16u;
+      const RunningStats st =
+          onDevice ? computeStatsDevice(field) : computeStatsHost(field);
+      vmin = static_cast<float>(st.min);
+      vmax = static_cast<float>(st.max);
+      levels = field_codec::quant_levels(nbits);
+      scale = field_codec::quant_scale(vmin, vmax, nbits);
+    }
+
+    if (onDevice)
+    {
+#ifdef USE_KOKKOS
+      if (nbits == 8)
+      {
+        dev8 = Kokkos::View<std::uint8_t*, MemSpace>(
+            Kokkos::view_alloc(Kokkos::WithoutInitializing, "snap_q8"), N);
+        Kokkos::parallel_for(
+            "snap_q8", nbNodes,
+            field_codec::QuantizeKernel<arrayReal, decltype(dev8)>{
+                field, col, dev8, vmin, scale, levels});
+        payload = reinterpret_cast<const char*>(dev8.data());
+        payloadBytes = N;
+      }
+      else
+      {
+        dev16 = Kokkos::View<std::uint16_t*, MemSpace>(
+            Kokkos::view_alloc(Kokkos::WithoutInitializing, "snap_16"), N);
+        if (codec == field_codec::F16)
+          Kokkos::parallel_for(
+              "snap_f16", nbNodes,
+              field_codec::HalfKernel<arrayReal, decltype(dev16)>{field, col,
+                                                                  dev16});
+        else
+          Kokkos::parallel_for(
+              "snap_q16", nbNodes,
+              field_codec::QuantizeKernel<arrayReal, decltype(dev16)>{
+                  field, col, dev16, vmin, scale, levels});
+        payload = reinterpret_cast<const char*>(dev16.data());
+        payloadBytes = 2 * N;
+      }
+      Kokkos::fence();
+#endif
+    }
+    else
+    {
+#ifdef USE_KOKKOS
+      Kokkos::fence();
+#endif
+      if (nbits == 8)
+      {
+        host8.resize(N);
+        for (int n = 0; n < nbNodes; n++)
+          host8[n] = static_cast<std::uint8_t>(
+              field_codec::quantize(field(n, col), vmin, scale, levels));
+        payload = reinterpret_cast<const char*>(host8.data());
+        payloadBytes = N;
+      }
+      else
+      {
+        host16.resize(N);
+        for (int n = 0; n < nbNodes; n++)
+          host16[n] =
+              (codec == field_codec::F16)
+                  ? field_codec::float_to_half(field(n, col))
+                  : static_cast<std::uint16_t>(field_codec::quantize(
+                        field(n, col), vmin, scale, levels));
+        payload = reinterpret_cast<const char*>(host16.data());
+        payloadBytes = 2 * N;
+      }
+    }
+  }
+  snapshotEncodeTime_ += std::chrono::duration<double>(
+                             std::chrono::steady_clock::now() - tEnc0)
+                             .count();
+
+  if (onDevice)
+  {
+    const auto startCopy = std::chrono::steady_clock::now();
+    double touch = 0.0;
+    if (payloadBytes == N)
+    {
+      const std::uint8_t* p = reinterpret_cast<const std::uint8_t*>(payload);
+      for (std::size_t i = 0; i < N; i++) touch += p[i];
+    }
+    else
+    {
+      const std::uint16_t* p = reinterpret_cast<const std::uint16_t*>(payload);
+      for (std::size_t i = 0; i < N; i++) touch += p[i];
+    }
+    touchSink_ += touch;
+    snapshotCopyTime_ += std::chrono::duration<double>(
+                             std::chrono::steady_clock::now() - startCopy)
+                             .count();
+  }
 
   std::ostringstream name;
   name << snap_folder_ << "/snapshot_" << std::setw(6) << std::setfill('0')
@@ -718,10 +857,9 @@ std::size_t SEMproxy::saveSnapshotBin(int timestep, const arrayReal& field)
 
   const field_codec::Header hd = field_codec::make_header(
       static_cast<std::uint32_t>(nbNodes), static_cast<std::uint32_t>(timestep),
-      field_codec::RAW_F32, 32, 0.f, 0.f);
+      codec, nbits, vmin, vmax);
   file.write(reinterpret_cast<const char*>(&hd), sizeof(hd));
-  file.write(reinterpret_cast<const char*>(values.data()),
-             static_cast<std::streamsize>(values.size() * sizeof(float)));
+  file.write(payload, static_cast<std::streamsize>(payloadBytes));
   bytes += static_cast<std::size_t>(file.tellp());
 
   if (opt_.fsync_snapshots)
@@ -887,7 +1025,7 @@ void SEMproxy::writeMetrics(double computeTime, double snapshotWriteTime,
             "slice_count,slice_bytes,slice_extract_time_s,slice_fsync_time_s,"
             "fsync,snapshot_sync_time_s,insitu_stats_s,insitu_hist_s,"
             "insitu_vel_s,insitu_write_s,seismo_extract_time_s,"
-            "snapshot_copy_s,insitu_copy_s\n";
+            "snapshot_copy_s,insitu_copy_s,snap_format,snap_encode_s\n";
   }
   file << std::setprecision(9) << opt_.ex << ',' << opt_.ey << ',' << opt_.ez
        << ',' << opt_.order << ',' << m_mesh->getNumberOfNodes() << ','
@@ -906,7 +1044,8 @@ void SEMproxy::writeMetrics(double computeTime, double snapshotWriteTime,
        << ',' << sliceExtractTime << ',' << sliceFsyncTime << ','
        << (opt_.fsync_snapshots ? 1 : 0) << ',' << snapshotSyncTime_ << ','
        << insitu_stats_s_ << ',' << insitu_hist_s_ << ',' << insitu_vel_s_
-       << ',' << insitu_write_s_ << ',' << seismo_extract_s_ << ',' << snapshotCopyTime_ << ',' << insitu_copy_s_ << '\n';
+       << ',' << insitu_write_s_ << ',' << seismo_extract_s_ << ',' << snapshotCopyTime_ << ',' << insitu_copy_s_ << ',' << opt_.snap_format
+       << ',' << snapshotEncodeTime_ << '\n';
 }
 
 // Initialize arrays
