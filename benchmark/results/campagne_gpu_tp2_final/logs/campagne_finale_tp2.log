@@ -1,0 +1,137 @@
+nohup: les entrées sont ignorées
+=== debut : lun. 02 nov. 2026 22:40:16 CET
+=== commit : 64b893c (branche fix/tp2-mesures)
+NVIDIA GeForce RTX 5050 Laptop GPU, 595.99.02
+Sys. de fichiers                  Taille Utilisé Dispo Uti% Monté sur
+/dev/mapper/ubuntu--vg-ubuntu--lv   935G    226G  663G  26% /
+=== 1. S (50) : lun. 02 nov. 2026 22:40:16 CET
+Systeme de fichiers : /dev/mapper/ubuntu--vg-ubuntu--lv ext4   980211368 236033996  694311644  26% /
+[S=50] mode=sans run=1/5
+[S=50] mode=sans run=2/5
+[S=50] mode=sans run=3/5
+[S=50] mode=sans run=4/5
+[S=50] mode=sans run=5/5
+[S=50] mode=adhoc run=1/5
+[S=50] mode=adhoc run=2/5
+[S=50] mode=adhoc run=3/5
+[S=50] mode=adhoc run=4/5
+[S=50] mode=adhoc run=5/5
+[S=50] mode=adhoc_fsync run=1/5
+[S=50] mode=adhoc_fsync run=2/5
+[S=50] mode=adhoc_fsync run=3/5
+[S=50] mode=adhoc_fsync run=4/5
+[S=50] mode=adhoc_fsync run=5/5
+[S=50] mode=insitu run=1/5
+[S=50] mode=insitu run=2/5
+[S=50] mode=insitu run=3/5
+[S=50] mode=insitu run=4/5
+[S=50] mode=insitu run=5/5
+[S=50] mode=insitu_fsync run=1/5
+[S=50] mode=insitu_fsync run=2/5
+[S=50] mode=insitu_fsync run=3/5
+[S=50] mode=insitu_fsync run=4/5
+[S=50] mode=insitu_fsync run=5/5
+[S=50] mode=insitu_host run=1/5
+[S=50] mode=insitu_host run=2/5
+[S=50] mode=insitu_host run=3/5
+[S=50] mode=insitu_host run=4/5
+[S=50] mode=insitu_host run=5/5
+
+# Resume des mesures
+
+- machine : benachour-souhila-LOQ-15IRX10 (inconnu, 20 threads logiques, OMP_NUM_THREADS=20)
+- GPU : NVIDIA GeForce RTX 5050 Laptop GPU, 8151 MiB, 595.99.02
+- systeme de fichiers : `/dev/mapper/ubuntu--vg-ubuntu--lv ext4   980211368 236033996  694311644  26% /`
+- commit : `64b893c34a0f38f190539c7bede926ccb75e56a5` (modifications non commitees : True)
+- repetitions : 5 ; mediane [min ; max]
+
+## S (50^3 elements)
+
+| mode | runs | total (s) | calcul (s) | ecriture snapshots (s) | dont fsync (s) | in-situ stats (s) | in-situ hist (s) | in-situ vitesse (s) | ecriture in-situ (s) | copie GPU->hote snapshots (s) | copie GPU->hote in-situ (s) | Python ad-hoc (s) | volume ecrit |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| sans | 5 | 0.834 [0.810 ; 0.873] | 0.545 [0.543 ; 0.549] | 0.000 [0.000 ; 0.000] | 0.000 [0.000 ; 0.000] | 0.000 [0.000 ; 0.000] | 0.000 [0.000 ; 0.000] | 0.000 [0.000 ; 0.000] | 0.000 [0.000 ; 0.000] | 0.000 [0.000 ; 0.000] | 0.000 [0.000 ; 0.000] | - | 0.00 Mo |
+| adhoc | 5, lectures chaud | 18.455 [17.159 ; 18.469] | 0.546 [0.534 ; 0.551] | 16.307 [16.302 ; 16.349] | 0.000 [0.000 ; 0.000] | 0.000 [0.000 ; 0.000] | 0.000 [0.000 ; 0.000] | 0.000 [0.000 ; 0.000] | 0.000 [0.000 ; 0.000] | 0.066 [0.065 ; 0.066] | 0.000 [0.000 ; 0.000] | 18.296 [18.270 ; 18.552] | 716.37 Mo |
+| adhoc_fsync | 5, lectures chaud | 18.715 [18.701 ; 18.853] | 0.542 [0.537 ; 0.556] | 16.563 [16.552 ; 16.700] | 0.258 [0.245 ; 0.393] | 0.000 [0.000 ; 0.000] | 0.000 [0.000 ; 0.000] | 0.000 [0.000 ; 0.000] | 0.000 [0.000 ; 0.000] | 0.069 [0.066 ; 0.070] | 0.000 [0.000 ; 0.000] | 18.293 [18.215 ; 18.386] | 716.37 Mo |
+| insitu | 5 | 116.184 [116.134 ; 117.537] | 0.499 [0.499 ; 0.500] | 0.000 [0.000 ; 0.000] | 0.000 [0.000 ; 0.000] | 0.010 [0.010 ; 0.010] | 114.681 [114.641 ; 114.871] | 0.002 [0.002 ; 0.002] | 0.721 [0.719 ; 0.728] | 0.000 [0.000 ; 0.000] | 0.000 [0.000 ; 0.000] | - | 32.93 Mo |
+| insitu_fsync | 5 | 116.215 [116.023 ; 116.281] | 0.499 [0.498 ; 0.500] | 0.000 [0.000 ; 0.000] | 0.000 [0.000 ; 0.000] | 0.010 [0.010 ; 0.010] | 114.701 [114.505 ; 114.761] | 0.002 [0.002 ; 0.002] | 0.747 [0.746 ; 0.749] | 0.000 [0.000 ; 0.000] | 0.000 [0.000 ; 0.000] | - | 32.93 Mo |
+| insitu_host | 5 | 1.820 [1.812 ; 1.829] | 0.563 [0.556 ; 0.565] | 0.000 [0.000 ; 0.000] | 0.000 [0.000 ; 0.000] | 0.125 [0.125 ; 0.125] | 0.061 [0.061 ; 0.063] | 0.025 [0.025 ; 0.027] | 0.715 [0.715 ; 0.721] | 0.000 [0.000 ; 0.000] | 0.064 [0.064 ; 0.068] | - | 32.93 Mo |
+
+Notes : 'total' = duree de la simulation vue de l'exterieur (sans les scripts Python). Le cout d'un workflow ad-hoc = total + Python ad-hoc. Sans `fsync`, le temps d'ecriture est celui vu par l'application (copie dans le cache du systeme) ; avec `fsync` c'est le temps de persistance.
+
+Donnees brutes : /home/benachour-souhila/Documents/m2/FUnTiDES-lite/bench_out/S/runs.csv
+=== 2. M (100) : lun. 02 nov. 2026 23:06:02 CET
+Systeme de fichiers : /dev/mapper/ubuntu--vg-ubuntu--lv ext4   980211368 236124244  694221396  26% /
+[M=100] mode=sans run=1/5
+[M=100] mode=sans run=2/5
+[M=100] mode=sans run=3/5
+[M=100] mode=sans run=4/5
+[M=100] mode=sans run=5/5
+[M=100] mode=adhoc run=1/5
+[M=100] mode=adhoc run=2/5
+[M=100] mode=adhoc run=3/5
+[M=100] mode=adhoc run=4/5
+[M=100] mode=adhoc run=5/5
+[M=100] mode=adhoc_fsync run=1/5
+[M=100] mode=adhoc_fsync run=2/5
+[M=100] mode=adhoc_fsync run=3/5
+[M=100] mode=adhoc_fsync run=4/5
+[M=100] mode=adhoc_fsync run=5/5
+[M=100] mode=insitu run=1/5
+[M=100] mode=insitu run=2/5
+[M=100] mode=insitu run=3/5
+[M=100] mode=insitu run=4/5
+[M=100] mode=insitu run=5/5
+[M=100] mode=insitu_fsync run=1/5
+[M=100] mode=insitu_fsync run=2/5
+[M=100] mode=insitu_fsync run=3/5
+[M=100] mode=insitu_fsync run=4/5
+[M=100] mode=insitu_fsync run=5/5
+[M=100] mode=insitu_host run=1/5
+[M=100] mode=insitu_host run=2/5
+[M=100] mode=insitu_host run=3/5
+[M=100] mode=insitu_host run=4/5
+[M=100] mode=insitu_host run=5/5
+
+# Resume des mesures
+
+- machine : benachour-souhila-LOQ-15IRX10 (inconnu, 20 threads logiques, OMP_NUM_THREADS=20)
+- GPU : NVIDIA GeForce RTX 5050 Laptop GPU, 8151 MiB, 595.99.02
+- systeme de fichiers : `/dev/mapper/ubuntu--vg-ubuntu--lv ext4   980211368 236124244  694221396  26% /`
+- commit : `64b893c34a0f38f190539c7bede926ccb75e56a5` (modifications non commitees : True)
+- repetitions : 5 ; mediane [min ; max]
+
+## M (100^3 elements)
+
+| mode | runs | total (s) | calcul (s) | ecriture snapshots (s) | dont fsync (s) | in-situ stats (s) | in-situ hist (s) | in-situ vitesse (s) | ecriture in-situ (s) | copie GPU->hote snapshots (s) | copie GPU->hote in-situ (s) | Python ad-hoc (s) | volume ecrit |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| sans | 5 | 6.696 [6.671 ; 6.771] | 6.353 [6.317 ; 6.361] | 0.000 [0.000 ; 0.000] | 0.000 [0.000 ; 0.000] | 0.000 [0.000 ; 0.000] | 0.000 [0.000 ; 0.000] | 0.000 [0.000 ; 0.000] | 0.000 [0.000 ; 0.000] | 0.000 [0.000 ; 0.000] | 0.000 [0.000 ; 0.000] | - | 0.00 Mo |
+| adhoc | 5, lectures chaud | 133.435 [133.423 ; 136.660] | 5.265 [5.241 ; 5.280] | 126.484 [126.454 ; 130.150] | 0.000 [0.000 ; 0.000] | 0.000 [0.000 ; 0.000] | 0.000 [0.000 ; 0.000] | 0.000 [0.000 ; 0.000] | 0.000 [0.000 ; 0.000] | 0.512 [0.505 ; 0.522] | 0.000 [0.000 ; 0.000] | 127.735 [127.569 ; 127.939] | 5405.56 Mo |
+| adhoc_fsync | 5, lectures chaud | 134.724 [134.588 ; 134.755] | 5.247 [5.234 ; 5.258] | 127.782 [127.635 ; 127.813] | 1.612 [1.551 ; 1.620] | 0.000 [0.000 ; 0.000] | 0.000 [0.000 ; 0.000] | 0.000 [0.000 ; 0.000] | 0.000 [0.000 ; 0.000] | 0.514 [0.507 ; 0.518] | 0.000 [0.000 ; 0.000] | 127.557 [127.239 ; 127.848] | 5405.55 Mo |
+| insitu | 5 | 921.858 [920.844 ; 923.514] | 5.331 [5.320 ; 5.351] | 0.000 [0.000 ; 0.000] | 0.000 [0.000 ; 0.000] | 0.057 [0.057 ; 0.057] | 910.427 [909.412 ; 910.752] | 0.013 [0.013 ; 0.013] | 5.632 [5.627 ; 5.660] | 0.000 [0.000 ; 0.000] | 0.000 [0.000 ; 0.000] | - | 259.52 Mo |
+| insitu_fsync | 5 | 922.860 [921.011 ; 923.684] | 5.333 [5.327 ; 5.340] | 0.000 [0.000 ; 0.000] | 0.000 [0.000 ; 0.000] | 0.057 [0.057 ; 0.057] | 911.344 [909.530 ; 912.196] | 0.013 [0.013 ; 0.013] | 5.692 [5.691 ; 5.714] | 0.000 [0.000 ; 0.000] | 0.000 [0.000 ; 0.000] | - | 259.52 Mo |
+| insitu_host | 5 | 13.800 [13.767 ; 13.817] | 5.630 [5.604 ; 5.653] | 0.000 [0.000 ; 0.000] | 0.000 [0.000 ; 0.000] | 0.986 [0.984 ; 0.986] | 0.477 [0.476 ; 0.481] | 0.202 [0.202 ; 0.207] | 5.603 [5.599 ; 5.608] | 0.000 [0.000 ; 0.000] | 0.501 [0.500 ; 0.503] | - | 259.52 Mo |
+
+Notes : 'total' = duree de la simulation vue de l'exterieur (sans les scripts Python). Le cout d'un workflow ad-hoc = total + Python ad-hoc. Sans `fsync`, le temps d'ecriture est celui vu par l'application (copie dans le cache du systeme) ; avec `fsync` c'est le temps de persistance.
+
+Donnees brutes : /home/benachour-souhila/Documents/m2/FUnTiDES-lite/bench_out/M/runs.csv
+=== 3. L (200) sans Python : mar. 03 nov. 2026 02:25:14 CET
+Sys. de fichiers                  Taille Utilisé Dispo Uti% Monté sur
+/dev/mapper/ubuntu--vg-ubuntu--lv   935G    226G  662G  26% /
+Systeme de fichiers : /dev/mapper/ubuntu--vg-ubuntu--lv ext4   980211368 236886252  693459388  26% /
+[L=200] mode=sans run=1/5
+[L=200] mode=sans run=2/5
+[L=200] mode=sans run=3/5
+[L=200] mode=sans run=4/5
+[L=200] mode=sans run=5/5
+[L=200] mode=adhoc run=1/5
+[L=200] mode=adhoc run=2/5
+[L=200] mode=adhoc run=3/5
+[L=200] mode=adhoc run=4/5
+[L=200] mode=adhoc run=5/5
+[L=200] mode=adhoc_fsync run=1/5
+[L=200] mode=adhoc_fsync run=2/5
+[L=200] mode=adhoc_fsync run=3/5
+[L=200] mode=adhoc_fsync run=4/5
+[L=200] mode=adhoc_fsync run=5/5
+[L=200] mode=insitu run=1/5
+[L=200] mode=insitu run=2/5

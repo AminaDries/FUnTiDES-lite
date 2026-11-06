@@ -101,9 +101,11 @@ def mesurer_visu(viz_dir, dossier_run, mode):
         t_snap = chronometrer([sys.executable, os.path.join(viz_dir, "plot_snapshot.py"),
                         os.path.join(dossier_run, "slices")], env)
         
-    t_sis = chronometrer([sys.executable, os.path.join(viz_dir, "plot_sismos.py"),
-                          dossier_run], env)
-    if t_snap is None or t_sis is None:
+    # Les runs sont lances avec --no-seismos (reference sans sortie) : il n'y a
+    # plus de sismos a tracer ici. La visualisation des sismos est mesuree a part
+    # (benchmark/bench_sismos.py). Le temps "image" ne porte donc que sur le champ.
+    t_sis = 0.0
+    if t_snap is None:
         return t_snap, t_sis, None
     return t_snap, t_sis, t_snap + t_sis
 
@@ -116,8 +118,10 @@ def lancer(exe, ex, threads, mode, run, args, dossier_run, fichier_rcv):
     metrics = os.path.join(dossier_run, "metrics.csv")
     cmd = [exe, "--ex", str(ex), "--ey", str(ex), "--ez", str(ex),
            "--timemax", str(args.timemax),
-           "--receivers-file", fichier_rcv, "--seismo-dir", dossier_run,
-           "--metrics-file", metrics]
+           "--metrics-file", metrics,
+           # reference sans aucune sortie (groupe, TP2) : pas de sismos ni
+           # d'extraction des recepteurs, pas d'affichage periodique
+           "--no-seismos", "--quiet"]
     if mode == "avec":
         cmd += ["--snapshots", "--snap-interval", str(args.snap_interval),
                 "--snap-folder", snap]

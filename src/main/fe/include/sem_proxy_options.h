@@ -37,7 +37,7 @@ class SemProxyOptions
 
   // slices
   bool slices = false;                    // faut-il sauvegarder des slices?
-  std::string slice_axis = "z";                  // dans quelle diretion on coupe
+  std::string slice_axis = "z";                  // dans quelle direction on coupe
   float slice_pos = 1000.f;               // à quelle hauteur on coupe (en mètres)
   std::string slice_folder = "slices";    // dossier où on range les fichiers
   

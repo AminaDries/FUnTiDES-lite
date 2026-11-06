@@ -1,0 +1,4 @@
+30 analyses, 64481201 nœuds, source en [1010. 1010. 1010.]
+Nœuds gardés : 7123436 (distance entre 150 m et 600 m)
+Vitesse estimée : 1460 m/s   (modèle : 1500 m/s, écart -2.7 %)
+Instant d'émission apparent : 0.193 s

@@ -129,6 +129,9 @@ class SEMproxy
   double insitu_hist_s_ = 0.0;   // temps in-situ histogramme (boucle)
   double insitu_vel_s_ = 0.0;    // temps in-situ pics par noeud (boucle)
   double insitu_write_s_ = 0.0;  // ecriture (+ fsync) des fichiers in-situ
+  double snapshotCopyTime_ = 0.0;  // sonde : 1re lecture du champ par le CPU (snapshots)
+  double insitu_copy_s_ = 0.0;     // sonde : idem pour les stats in-situ en mode host
+  double touchSink_ = 0.0;         // empeche le compilateur de supprimer la boucle de sonde
   std::string seismo_dir_;
 
   SemProxyOptions opt_;
