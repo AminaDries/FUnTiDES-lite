@@ -1,0 +1,16 @@
+# Resume des mesures
+
+- machine : benachour-souhila-LOQ-15IRX10 (inconnu, 20 threads logiques, OMP_NUM_THREADS=20)
+- GPU : NVIDIA GeForce RTX 5050 Laptop GPU, 8151 MiB, 595.99.02
+- systeme de fichiers : `/dev/mapper/ubuntu--vg-ubuntu--lv ext4   980211368 240383844  689961796  26% /`
+- commit : `7777beb9716bb7198a6ca802e5ce7be4892374c1` (modifications non commitees : True)
+- repetitions : 5 ; mediane [min ; max]
+
+## M (100^3 elements)
+
+| mode | runs | total (s) | calcul (s) | ecriture snapshots (s) | dont fsync (s) | in-situ stats (s) | in-situ hist (s) | in-situ vitesse (s) | ecriture in-situ (s) | copie GPU->hote snapshots (s) | copie GPU->hote in-situ (s) | Python ad-hoc (s) | volume ecrit |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| insitu | 5 | 12.581 [12.565 ; 12.620] | 6.286 [6.253 ; 6.292] | 0.000 [0.000 ; 0.000] | 0.000 [0.000 ; 0.000] | 0.090 [0.088 ; 0.090] | 0.062 [0.061 ; 0.063] | 0.014 [0.014 ; 0.015] | 5.742 [5.734 ; 5.766] | 0.000 [0.000 ; 0.000] | 0.000 [0.000 ; 0.000] | - | 259.52 Mo |
+| insitu_fsync | 5 | 12.607 [12.584 ; 12.631] | 6.292 [6.284 ; 6.292] | 0.000 [0.000 ; 0.000] | 0.000 [0.000 ; 0.000] | 0.090 [0.090 ; 0.090] | 0.062 [0.062 ; 0.063] | 0.014 [0.014 ; 0.015] | 5.766 [5.759 ; 5.785] | 0.000 [0.000 ; 0.000] | 0.000 [0.000 ; 0.000] | - | 259.52 Mo |
+
+Notes : 'total' = duree de la simulation vue de l'exterieur (sans les scripts Python). Le cout d'un workflow ad-hoc = total + Python ad-hoc. Sans `fsync`, le temps d'ecriture est celui vu par l'application (copie dans le cache du systeme) ; avec `fsync` c'est le temps de persistance.

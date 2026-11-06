@@ -274,3 +274,8 @@ receiver.dat
 
 *.err
 benchmark_comparison.png
+snapshots*/
+build-kokkos/
+
+
+output_fake/

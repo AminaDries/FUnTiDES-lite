@@ -1,0 +1,30 @@
+{
+  "date": "2026-11-02 11:28:22",
+  "machine": "DESKTOP-0AFKAGB",
+  "noyau": "6.18.54.1-microsoft-standard-WSL2",
+  "cpu": "AMD Ryzen 7 5700U with Radeon Graphics",
+  "nproc": 16,
+  "omp_num_threads": 16,
+  "memoire": "7.4Gi",
+  "gpu": "inconnu",
+  "systeme_fichiers": "/dev/sdd       ext4 1055762868 2720180 999339216   1% /",
+  "commit": "78018814d19f4133fde06f3a5b84bf7bbde8b63c",
+  "modifications_non_commitees": false,
+  "configs": [
+    "S=50"
+  ],
+  "repetitions": 5,
+  "timemax": 1.5,
+  "snap_interval": 50,
+  "insitu_interval": 50,
+  "hist_bound": 2.23736,
+  "executable": "/home/ab/CISD/Projet_insitu/FUnTiDES-lite/build-kokkos/bin/semproxy",
+  "options_compilation": {
+    "CMAKE_BUILD_TYPE": "Release",
+    "CMAKE_CXX_FLAGS": "",
+    "CMAKE_CXX_FLAGS_RELEASE": "-O3 -DNDEBUG -march=native -mtune=native",
+    "Kokkos_ENABLE_CUDA": "OFF",
+    "Kokkos_ENABLE_OPENMP": "ON",
+    "Kokkos_ENABLE_SERIAL": "ON"
+  }
+}

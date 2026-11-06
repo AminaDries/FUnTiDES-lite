@@ -14,11 +14,24 @@
 #include <solver_factory.h>
 #include <utils.h>
 
+#include <array>
 #include <memory>
 #include <string>
 #include <variant>
+#include <vector>
 
+#include <cstddef>
+#include "insitu_stats.h" 
+#include "insitu_sismos.h"
 #include "sem_proxy_options.h"
+
+struct InsituRecord                                               
+{                                                                  
+  int step;                            
+  double time;                              
+  RunningStats stats;        
+  double seconds;      
+};  
 
 /**
  * @class SEMproxy
@@ -74,24 +87,65 @@ class SEMproxy
    */
   float find_cfl_dt(float cfl_factor);
 
-  void saveSnapshot(int timestep);
+  //void saveSnapshot(int timestep)
+  // :: void saveSnapshot(int timestep, const arrayReal& field);
+  
+  std::size_t saveSnapshot(int timestep, const arrayReal& field);  
+  std::size_t saveSlice(int timestep, const arrayReal& field,
+                        double& extractTime, double& writeTime,
+                        double& fsyncTime);
+  void writeMetrics(double computeTime, double snapshotWriteTime,
+                    int snapshotCount, std::size_t snapshotBytes,
+                    double seismoWriteTime, std::size_t seismoBytes,
+                    double sliceWriteTime, int sliceCount,
+                    std::size_t sliceBytes, double sliceExtractTime,
+                    double sliceFsyncTime) const;
+      RunningStats computeStatsHost(const arrayReal& field) const;
+      RunningStats computeStatsDevice(const arrayReal& field) const;
+      void writeInsituStats(const std::vector<InsituRecord>& records) const;
+      void writeInsituSismos(const std::vector<SeismoStream>& streams,
+                             const std::vector<SeismoFinal>& finals,
+                             const std::array<double, 2>& velPeak,
+                             const std::array<double, 2>& velFirst) const;
 
- private:
+  private:
   int i1 = 0;
   int i2 = 1;
+  double snapshotSyncTime_ = 0.0;  // secondes passees dans fsync (snapshots)
 
   // proper to cartesian mesh
   // or any structured mesh
   int nb_elements_[3] = {0};
   int nb_nodes_[3] = {0};
   std::array<float, 3> src_coord_ = {0};
-  std::array<float, 3> rcv_coord_ = {0};
   float domain_size_[3] = {0};
+  std::vector<std::array<float, 3>> rcv_coords_;
+  int nb_receivers_ = 1;
+  double insitu_sismos_loop_s_ = 0.0;   // temps in-situ sismos dans la boucle
+  double insitu_sismos_final_s_ = 0.0;  // temps in-situ sismos en fin de simulation
+  double seismo_fsync_s_ = 0.0;         // temps du fsync de seismos.csv
+  double seismo_extract_s_ = 0.0;       // temps d'extraction des recepteurs (tous les pas)
+  double insitu_stats_s_ = 0.0;  // temps in-situ stats (boucle)
+  double insitu_hist_s_ = 0.0;   // temps in-situ histogramme (boucle)
+  double insitu_vel_s_ = 0.0;    // temps in-situ pics par noeud (boucle)
+  double insitu_write_s_ = 0.0;  // ecriture (+ fsync) des fichiers in-situ
+  double snapshotCopyTime_ = 0.0;  // sonde : 1re lecture du champ par le CPU (snapshots)
+  double insitu_copy_s_ = 0.0;     // sonde : idem pour les stats in-situ en mode host
+  double touchSink_ = 0.0;         // empeche le compilateur de supprimer la boucle de sonde
+  std::string seismo_dir_;
 
+  SemProxyOptions opt_;
+  
   // snapshots
   bool is_snapshots_;
   int snap_time_interval_;
   std::string snap_folder_;
+
+  // slices
+  bool is_slices_;
+  std::string slice_axis_;
+  float slice_pos_;
+  std::string slice_folder_;
 
   // physics
   bool isElastic_;
@@ -121,6 +175,10 @@ class SEMproxy
 
   // initialize source and RHS
   void init_source();
+
+  void readReceivers(const std::string& filename, const SemProxyOptions& opt);
+
+  void saveSeismos();
 
   // allocate arrays and vectors
   void init_arrays();

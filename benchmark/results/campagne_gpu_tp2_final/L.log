@@ -1,0 +1,18 @@
+Systeme de fichiers : /dev/mapper/ubuntu--vg-ubuntu--lv ext4   980211368 236886252  693459388  26% /
+[L=200] mode=sans run=1/5
+[L=200] mode=sans run=2/5
+[L=200] mode=sans run=3/5
+[L=200] mode=sans run=4/5
+[L=200] mode=sans run=5/5
+[L=200] mode=adhoc run=1/5
+[L=200] mode=adhoc run=2/5
+[L=200] mode=adhoc run=3/5
+[L=200] mode=adhoc run=4/5
+[L=200] mode=adhoc run=5/5
+[L=200] mode=adhoc_fsync run=1/5
+[L=200] mode=adhoc_fsync run=2/5
+[L=200] mode=adhoc_fsync run=3/5
+[L=200] mode=adhoc_fsync run=4/5
+[L=200] mode=adhoc_fsync run=5/5
+[L=200] mode=insitu run=1/5
+[L=200] mode=insitu run=2/5
