@@ -76,6 +76,8 @@ SEMproxy::SEMproxy(const SemProxyOptions& opt)
   slice_pos_ = opt.slice_pos;
   slice_folder_ = opt.slice_folder;
   if (is_slices_) std::filesystem::create_directories(slice_folder_);
+  is_slice_image_ = opt.slice_image;
+  if (is_slice_image_) std::filesystem::create_directories(opt.image_folder);
 
   isElastic_ = opt.isElastic;
   cout << boolalpha;
@@ -427,6 +429,11 @@ void SEMproxy::run()
                               sliceExtractTime, sliceWriteTime, sliceFsyncTime);
       sliceCount++;
     }
+
+
+    // Image PPM de la slice (TP3, partie 1), memes pas que les slices
+    if (is_slice_image_ && indexTimeSample % snap_time_interval_ == 0)
+      image_bytes_ += saveSliceImage(indexTimeSample, solverData.m_pnGlobal);
 
     swap(i1, i2);
 
