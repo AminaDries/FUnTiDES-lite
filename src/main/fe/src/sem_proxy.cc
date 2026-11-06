@@ -985,7 +985,10 @@ void SEMproxy::writeMetrics(double computeTime, double snapshotWriteTime,
             "slice_count,slice_bytes,slice_extract_time_s,slice_fsync_time_s,"
             "fsync,snapshot_sync_time_s,insitu_stats_s,insitu_hist_s,"
             "insitu_vel_s,insitu_write_s,seismo_extract_time_s,"
-            "snapshot_copy_s,insitu_copy_s\n";
+            "snapshot_copy_s,insitu_copy_s,"
+            "slice_image,image_format,image_norm,image_width,image_height,"
+            "image_init_s,image_extract_s,image_write_s,image_fsync_s,"
+            "image_count,image_bytes\n";
   }
   file << std::setprecision(9) << opt_.ex << ',' << opt_.ey << ',' << opt_.ez
        << ',' << opt_.order << ',' << m_mesh->getNumberOfNodes() << ','
@@ -1004,7 +1007,12 @@ void SEMproxy::writeMetrics(double computeTime, double snapshotWriteTime,
        << ',' << sliceExtractTime << ',' << sliceFsyncTime << ','
        << (opt_.fsync_snapshots ? 1 : 0) << ',' << snapshotSyncTime_ << ','
        << insitu_stats_s_ << ',' << insitu_hist_s_ << ',' << insitu_vel_s_
-       << ',' << insitu_write_s_ << ',' << seismo_extract_s_ << ',' << snapshotCopyTime_ << ',' << insitu_copy_s_ << '\n';
+       << ',' << insitu_write_s_ << ',' << seismo_extract_s_ << ',' << snapshotCopyTime_ << ',' << insitu_copy_s_ << ','
+       << (is_slice_image_ ? 1 : 0) << ',' << opt_.image_format << ','
+       << opt_.image_norm << ',' << img_w_ << ',' << img_h_ << ','
+       << image_init_s_ << ',' << image_extract_s_ << ',' << image_write_s_
+       << ',' << image_fsync_s_ << ',' << image_count_ << ',' << image_bytes_
+       << '\n';
 }
 
 // Initialize arrays
