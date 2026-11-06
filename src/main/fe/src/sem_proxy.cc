@@ -793,6 +793,90 @@ std::size_t SEMproxy::saveSlice(int timestep, const arrayReal& field,
   return bytes;
 }
 
+// ===========================================================================
+// Images PPM des slices (TP3, partie 1)
+// ===========================================================================
+
+// Indice de la valeur de 'sorted' la plus proche de x ('sorted' est trie).
+static int nearestIndex(const std::vector<float>& sorted, float x)
+{
+  auto it = std::lower_bound(sorted.begin(), sorted.end(), x);
+  if (it == sorted.begin()) return 0;
+  if (it == sorted.end()) return static_cast<int>(sorted.size()) - 1;
+  const int i = static_cast<int>(it - sorted.begin());
+  return (x - sorted[i - 1] <= sorted[i] - x) ? i - 1 : i;
+}
+
+// Construit UNE FOIS la table pixel -> noeud du plan de coupe.
+void SEMproxy::initSliceImage()
+{
+  // --- axe coupe et axes de l'image (horizontal a, vertical b) ---
+  int axis = 2;
+  if (slice_axis_ == "x") axis = 0;
+  if (slice_axis_ == "y") axis = 1;
+  const int a = (axis == 0) ? 1 : 0;
+  const int b = (axis == 2) ? 1 : 2;
+  const float tol = 1e-3f;  // 1 mm, comme saveSlice
+
+  // --- 1. noeuds du plan ---
+  std::vector<int> nodes;
+  std::vector<float> U, V;  // coordonnees dans le plan
+  const int nbNodes = m_mesh->getNumberOfNodes();
+  for (int n = 0; n < nbNodes; n++)
+  {
+    if (std::abs(m_mesh->nodeCoord(n, axis) - slice_pos_) <= tol)
+    {
+      nodes.push_back(n);
+      U.push_back(m_mesh->nodeCoord(n, a));
+      V.push_back(m_mesh->nodeCoord(n, b));
+    }
+  }
+  if (nodes.empty())
+  {
+    std::cerr << "---- Warning : no mesh node on the slice plane, images disabled."
+              << std::endl;
+    is_slice_image_ = false;
+    return;
+  }
+
+  // --- 2. colonnes (Us) et lignes (Vs) distinctes, triees ---
+  auto uniqueSorted = [tol](std::vector<float> v) {
+    std::sort(v.begin(), v.end());
+    std::vector<float> out;
+    for (float x : v)
+      if (out.empty() || x - out.back() > tol) out.push_back(x);
+    return out;
+  };
+  const std::vector<float> Us = uniqueSorted(U);
+  const std::vector<float> Vs = uniqueSorted(V);
+  img_w_ = static_cast<int>(Us.size());
+  img_h_ = static_cast<int>(Vs.size());
+
+  // --- 3. chaque noeud dans sa case : grid[colonne + ligne * largeur] ---
+  std::vector<int> grid(static_cast<std::size_t>(img_w_) * img_h_, -1);
+  for (std::size_t k = 0; k < nodes.size(); k++)
+    grid[nearestIndex(Us, U[k]) + nearestIndex(Vs, V[k]) * img_w_] = nodes[k];
+
+  // --- 4. pixels regulierement espaces -> noeud le plus proche ---
+  //        ligne 0 de l'image = haut = plus grande valeur verticale
+  pix2node_.assign(grid.size(), -1);
+  const float du = (img_w_ > 1) ? (Us.back() - Us.front()) / (img_w_ - 1) : 0.f;
+  const float dv = (img_h_ > 1) ? (Vs.back() - Vs.front()) / (img_h_ - 1) : 0.f;
+  for (int y = 0; y < img_h_; y++)
+  {
+    const int iv = nearestIndex(Vs, Vs.back() - y * dv);
+    for (int x = 0; x < img_w_; x++)
+    {
+      const int iu = nearestIndex(Us, Us.front() + x * du);
+      const int node = grid[iu + iv * img_w_];
+      if (node < 0) throw std::runtime_error("initSliceImage : grille incomplete");
+      pix2node_[x + static_cast<std::size_t>(y) * img_w_] = node;
+    }
+  }
+  std::cout << "---- Slice image : " << img_w_ << " x " << img_h_ << " pixels ("
+            << nodes.size() << " nodes on the plane)." << std::endl;
+}
+
 // Ajoute une ligne dans le fichier de métriques (crée l'en-tête si besoin)
 void SEMproxy::writeMetrics(double computeTime, double snapshotWriteTime,
                             int snapshotCount, std::size_t snapshotBytes,
