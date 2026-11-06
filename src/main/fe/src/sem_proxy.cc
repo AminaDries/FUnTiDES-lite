@@ -29,9 +29,6 @@
 #include <sys/resource.h>
 #include <unistd.h>  // fsync, close
 
-#include <fcntl.h>    
-#include <unistd.h>   
-
 using namespace SourceAndReceiverUtils;
 
 SEMproxy::SEMproxy(const SemProxyOptions& opt)
@@ -754,6 +751,17 @@ std::size_t SEMproxy::saveSlice(int timestep, const arrayReal& field,
 
   auto t1 = std::chrono::steady_clock::now();
   extractTime += std::chrono::duration<double>(t1 - t0).count();
+
+  // Plan qui ne passe par aucun noeud (ex. --slice-pos 1005) : fichiers vides.
+  // On previent une seule fois au lieu d'ecrire des slices vides en silence.
+  static bool emptyWarned = false;
+  if (points.empty() && !emptyWarned)
+  {
+    std::cerr << "---- Warning : the slice plane " << slice_axis_ << " = "
+              << slice_pos_ << " m contains no mesh node, slice files will be"
+              << " empty. Choose a position on a node plane." << std::endl;
+    emptyWarned = true;
+  }
 
   // ===== Phase 2 : écriture =====
   std::ostringstream name;
