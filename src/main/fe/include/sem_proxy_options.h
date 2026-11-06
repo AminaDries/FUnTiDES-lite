@@ -41,6 +41,14 @@ class SemProxyOptions
   float slice_pos = 1000.f;               // à quelle hauteur on coupe (en mètres)
   std::string slice_folder = "slices";    // dossier où on range les fichiers
   
+  
+  // images PPM des slices (TP3, partie 1)
+  bool slice_image = false;               // faire une image de la slice ?
+  std::string image_format = "p6";        // p3 (texte) ou p6 (binaire)
+  std::string image_norm = "local";       // local, running ou fixed
+  float image_bound = 0.f;                // borne de |p| si image_norm = fixed
+  std::string image_folder = "images";    // dossier des images
+
   std::string metrics_file = "";
 
   bool insitu_stats = false;                      
@@ -79,6 +87,12 @@ class SemProxyOptions
       throw std::runtime_error("insitu-hist-bound must be > 0");
     if (slice_axis != "x" && slice_axis != "y" && slice_axis != "z")
       throw std::runtime_error("slice-axis must be x, y or z");
+    if (image_format != "p3" && image_format != "p6")
+      throw std::runtime_error("image-format must be p3 or p6");
+    if (image_norm != "local" && image_norm != "running" && image_norm != "fixed")
+      throw std::runtime_error("image-norm must be local, running or fixed");
+    if (image_norm == "fixed" && image_bound <= 0.f)
+      throw std::runtime_error("image-norm fixed needs --image-bound > 0");    
   }
 
   static void bind_cli(cxxopts::Options& opts, SemProxyOptions& o)
@@ -135,6 +149,16 @@ class SemProxyOptions
         cxxopts::value<float>(o.slice_pos))(
         "slice-folder", "Folder where slices are written",
         cxxopts::value<std::string>(o.slice_folder))(
+        "slice-image", "Write a PPM image of the slice (same steps as --snap-interval)",
+        cxxopts::value<bool>(o.slice_image))(
+        "image-format", "PPM format: p3 (text) | p6 (binary)",
+        cxxopts::value<std::string>(o.image_format))(
+        "image-norm", "Color bounds: local | running | fixed",
+        cxxopts::value<std::string>(o.image_norm))(
+        "image-bound", "Bound of |p| for --image-norm fixed",
+        cxxopts::value<float>(o.image_bound))(
+        "image-folder", "Folder where PPM images are written",
+        cxxopts::value<std::string>(o.image_folder))(
         "metrics-file", "CSV file where run metrics are appended",
         cxxopts::value<std::string>(o.metrics_file))(
         "insitu-stats", "Compute statistics in-situ (during the run)",
