@@ -33,7 +33,8 @@ class SemProxyOptions
   // snapshots
   bool snapshots = false;                 
   int snap_interval = 20;                 
-  std::string snap_folder = "snapshots";     
+  std::string snap_folder = "snapshots";
+  std::string snap_format = "csv";     
 
   // slices
   bool slices = false;                    // faut-il sauvegarder des slices?
@@ -69,6 +70,8 @@ class SemProxyOptions
       throw std::runtime_error("lx/ly/lz must be > 0");
     if (snap_interval <= 0)
       throw std::runtime_error("snap-interval must be > 0");
+    if (snap_format != "csv" && snap_format != "bin")
+      throw std::runtime_error("snap-format must be csv or bin");
     if (insitu_interval <= 0)                                          
       throw std::runtime_error("insitu-interval must be > 0"); 
         if (insitu_mode != "device" && insitu_mode != "host")
@@ -127,6 +130,8 @@ class SemProxyOptions
         "snap-folder", "Folder where snapshots are written",
         // cxxopts::value<std::string>(o.snap_folder));
         cxxopts::value<std::string>(o.snap_folder))(
+        "snap-format", "Snapshot format: csv | bin (binary float32)",
+        cxxopts::value<std::string>(o.snap_format))(
         "slices", "Save a 2D slice of the wave field (CSV)",
         cxxopts::value<bool>(o.slices))(
         "slice-axis", "Axis perpendicular to the slice: x|y|z",

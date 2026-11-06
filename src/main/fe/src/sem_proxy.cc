@@ -7,6 +7,7 @@
 
 #include "sem_proxy.h"
 #include "insitu_gpu.h"
+#include "field_codec.h"
 
 #include <cartesian_struct_builder.h>
 #include <cartesian_unstruct_builder.h>
@@ -646,6 +647,7 @@ std::size_t SEMproxy::saveSnapshot(int timestep, const arrayReal& field)
                              std::chrono::steady_clock::now() - startCopy)
                              .count();
   }
+  if (opt_.snap_format == "bin") return saveSnapshotBin(timestep, field);
   std::ostringstream name;
   name << snap_folder_ << "/snapshot_" << std::setw(6) << std::setfill('0')
        << timestep << ".csv";
@@ -676,6 +678,62 @@ std::size_t SEMproxy::saveSnapshot(int timestep, const arrayReal& field)
                              .count();
   }
   return bytes;  // octets écrits
+}
+
+std::size_t SEMproxy::saveSnapshotBin(int timestep, const arrayReal& field)
+{
+  const int nbNodes = m_mesh->getNumberOfNodes();
+  std::size_t bytes = 0;
+
+  if (!snapCoordsWritten_)
+  {
+    std::vector<float> xyz(3 * static_cast<std::size_t>(nbNodes));
+    for (int n = 0; n < nbNodes; n++)
+      for (int d = 0; d < 3; d++)
+        xyz[3 * static_cast<std::size_t>(n) + d] =
+            static_cast<float>(m_mesh->nodeCoord(n, d));
+    const std::string cname = snap_folder_ + "/coords.bin";
+    std::ofstream fc(cname, std::ios::binary);
+    if (!fc) throw std::runtime_error("Cannot open " + cname);
+    const field_codec::Header hc = field_codec::make_header(
+        static_cast<std::uint32_t>(xyz.size()), 0, field_codec::RAW_F32, 32,
+        0.f, 0.f);
+    fc.write(reinterpret_cast<const char*>(&hc), sizeof(hc));
+    fc.write(reinterpret_cast<const char*>(xyz.data()),
+             static_cast<std::streamsize>(xyz.size() * sizeof(float)));
+    bytes += static_cast<std::size_t>(fc.tellp());
+    fc.close();
+    if (opt_.fsync_snapshots) syncFile(cname);
+    snapCoordsWritten_ = true;
+  }
+
+  std::vector<float> values(static_cast<std::size_t>(nbNodes));
+  for (int n = 0; n < nbNodes; n++) values[n] = field(n, i1);
+
+  std::ostringstream name;
+  name << snap_folder_ << "/snapshot_" << std::setw(6) << std::setfill('0')
+       << timestep << ".bin";
+  std::ofstream file(name.str(), std::ios::binary);
+  if (!file) throw std::runtime_error("Cannot open " + name.str());
+
+  const field_codec::Header hd = field_codec::make_header(
+      static_cast<std::uint32_t>(nbNodes), static_cast<std::uint32_t>(timestep),
+      field_codec::RAW_F32, 32, 0.f, 0.f);
+  file.write(reinterpret_cast<const char*>(&hd), sizeof(hd));
+  file.write(reinterpret_cast<const char*>(values.data()),
+             static_cast<std::streamsize>(values.size() * sizeof(float)));
+  bytes += static_cast<std::size_t>(file.tellp());
+
+  if (opt_.fsync_snapshots)
+  {
+    file.close();
+    const auto t0 = std::chrono::steady_clock::now();
+    syncFile(name.str());
+    snapshotSyncTime_ += std::chrono::duration<double>(
+                             std::chrono::steady_clock::now() - t0)
+                             .count();
+  }
+  return bytes;
 }
 
 // Statistiques en flux du champ de pression, calculees sur l'hote (CPU).

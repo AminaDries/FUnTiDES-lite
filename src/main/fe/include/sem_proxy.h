@@ -90,7 +90,8 @@ class SEMproxy
   //void saveSnapshot(int timestep)
   // :: void saveSnapshot(int timestep, const arrayReal& field);
   
-  std::size_t saveSnapshot(int timestep, const arrayReal& field);  
+  std::size_t saveSnapshot(int timestep, const arrayReal& field);
+  std::size_t saveSnapshotBin(int timestep, const arrayReal& field);  
   std::size_t saveSlice(int timestep, const arrayReal& field,
                         double& extractTime, double& writeTime,
                         double& fsyncTime);
@@ -131,6 +132,7 @@ class SEMproxy
   double insitu_write_s_ = 0.0;  // ecriture (+ fsync) des fichiers in-situ
   double snapshotCopyTime_ = 0.0;  // sonde : 1re lecture du champ par le CPU (snapshots)
   double insitu_copy_s_ = 0.0;     // sonde : idem pour les stats in-situ en mode host
+  bool snapCoordsWritten_ = false;
   double touchSink_ = 0.0;         // empeche le compilateur de supprimer la boucle de sonde
   std::string seismo_dir_;
 
