@@ -7,6 +7,7 @@
 
 #include "sem_proxy.h"
 #include "insitu_gpu.h"
+#include "ppm_image.h"
 
 #include <cartesian_struct_builder.h>
 #include <cartesian_unstruct_builder.h>
@@ -875,6 +876,70 @@ void SEMproxy::initSliceImage()
   }
   std::cout << "---- Slice image : " << img_w_ << " x " << img_h_ << " pixels ("
             << nodes.size() << " nodes on the plane)." << std::endl;
+}
+
+// Ecrit une image PPM de la slice (version CPU : le champ est lu par l'hote).
+std::size_t SEMproxy::saveSliceImage(int timestep, const arrayReal& field)
+{
+  // --- 0. premiere fois : construire la table pixel -> noeud ---
+  if (pix2node_.empty())
+  {
+    const auto t = std::chrono::steady_clock::now();
+    initSliceImage();
+    image_init_s_ += std::chrono::duration<double>(
+                         std::chrono::steady_clock::now() - t).count();
+    if (!is_slice_image_) return 0;  // aucun noeud sur le plan
+  }
+
+  // --- 1. lecture du champ ---
+#ifdef USE_KOKKOS
+  Kokkos::fence();  // annexe 1 : le calcul du pas est fini
+#endif
+  const auto t0 = std::chrono::steady_clock::now();
+
+  const std::size_t np = pix2node_.size();
+  std::vector<float> vals(np);
+  float localMax = 0.f;
+  for (std::size_t k = 0; k < np; k++)
+  {
+    vals[k] = field(pix2node_[k], i1);
+    localMax = std::max(localMax, std::abs(vals[k]));
+  }
+
+  // --- 2. borne : bornes symetriques [-bound, bound], 0 au centre ---
+  float bound = localMax;  // local
+  if (opt_.image_norm == "running")
+  {
+    img_running_max_ = std::max(img_running_max_, localMax);
+    bound = img_running_max_;
+  }
+  else if (opt_.image_norm == "fixed")
+    bound = opt_.image_bound;
+
+  // --- 3. couleurs ---
+  std::vector<ppm::RGB> pixels(np);
+  for (std::size_t k = 0; k < np; k++)
+    pixels[k] = ppm::coolwarm(ppm::normalize_symmetric(vals[k], bound));
+
+  const auto t1 = std::chrono::steady_clock::now();
+  image_extract_s_ += std::chrono::duration<double>(t1 - t0).count();
+
+  // --- 4. ecriture ---
+  std::ostringstream name;
+  name << opt_.image_folder << "/slice_" << std::setw(6) << std::setfill('0')
+       << timestep << ".ppm";
+  const std::size_t bytes = ppm::write_ppm(name.str(), pixels, img_w_, img_h_,
+                                           opt_.image_format == "p6");
+  const auto t2 = std::chrono::steady_clock::now();
+  image_write_s_ += std::chrono::duration<double>(t2 - t1).count();
+
+  // --- 5. fsync ---
+  syncFile(name.str());
+  image_fsync_s_ += std::chrono::duration<double>(
+                        std::chrono::steady_clock::now() - t2).count();
+
+  image_count_++;
+  return bytes;
 }
 
 // Ajoute une ligne dans le fichier de métriques (crée l'en-tête si besoin)
