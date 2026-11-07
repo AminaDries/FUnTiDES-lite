@@ -58,6 +58,9 @@ class SemProxyOptions
   // TP3 : snapshot declenche quand le front d'onde atteint un recepteur
   double trigger_threshold = 0.0;          // seuil absolu sur |p| (0 = desactive)
   std::string trigger_folder = "triggers"; // dossier des snapshots declenches
+  // TP3 : arret anticipe DELAI s apres l'arrivee de l'onde au dernier recepteur
+  double stop_after_receivers = 0.0;       // DELAI en secondes (0 = desactive)
+  double stop_threshold = 0.01;            // seuil d'arrivee sur |p| au recepteur
   bool quiet = false;  
   bool insitu_sismos = false;                          // stats des sismos en flux ?
   std::string insitu_sismos_file = "insitu_sismos.csv"; // fichier de sortie
@@ -74,6 +77,10 @@ class SemProxyOptions
       throw std::runtime_error("snap-interval must be > 0");
     if (trigger_threshold < 0)
       throw std::runtime_error("trigger-threshold must be >= 0");
+    if (stop_after_receivers < 0)
+      throw std::runtime_error("stop-after-receivers must be >= 0");
+    if (stop_threshold <= 0)
+      throw std::runtime_error("stop-threshold must be > 0");
     if (insitu_interval <= 0)                                          
       throw std::runtime_error("insitu-interval must be > 0"); 
         if (insitu_mode != "device" && insitu_mode != "host")
@@ -175,6 +182,10 @@ class SemProxyOptions
         "trigger-threshold", "Write a snapshot when |p| at a receiver first exceeds this value (0 = off)",
         cxxopts::value<double>(o.trigger_threshold))(
         "trigger-folder", "Folder where triggered snapshots and triggers.csv are written",
-        cxxopts::value<std::string>(o.trigger_folder));
+        cxxopts::value<std::string>(o.trigger_folder))(
+        "stop-after-receivers", "Stop the simulation this many seconds after the wave reached every receiver (0 = off)",
+        cxxopts::value<double>(o.stop_after_receivers))(
+        "stop-threshold", "Arrival threshold on |p| at a receiver for --stop-after-receivers",
+        cxxopts::value<double>(o.stop_threshold));
       }
 };

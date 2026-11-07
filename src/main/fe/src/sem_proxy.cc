@@ -17,6 +17,7 @@
 #include <cxxopts.hpp>
 #include <filesystem>
 #include <fstream>
+#include <cmath>
 #include <iomanip>
 #include <iostream>
 #include <sstream>
@@ -59,6 +60,8 @@ SEMproxy::SEMproxy(const SemProxyOptions& opt)
     throw std::runtime_error("--no-seismos et --trigger-threshold sont incompatibles");
   if (opt.trigger_threshold > 0)
     std::filesystem::create_directories(opt.trigger_folder);
+  if (opt.no_seismos && opt.stop_after_receivers > 0)
+    throw std::runtime_error("--no-seismos et --stop-after-receivers sont incompatibles");
 
   seismo_dir_ = opt.seismo_dir;
   readReceivers(opt.receivers_file, opt);
@@ -229,6 +232,16 @@ void SEMproxy::run()
   // TP3 : declenchement. -1 = recepteur pas encore atteint par l'onde.
   const bool trigger = opt_.trigger_threshold > 0;
   std::vector<int> triggerStep(trigger ? nb_receivers_ : 0, -1);
+
+  // TP3 : arret anticipe. On attend que l'onde ait atteint tous les recepteurs,
+  // puis encore stopDelaySteps pas (le temps que l'onde passe), et on s'arrete.
+  const bool stopOn = opt_.stop_after_receivers > 0;
+  const int stopDelaySteps =
+      static_cast<int>(std::lround(opt_.stop_after_receivers / dt_));
+  std::vector<int> arrivalStep(stopOn ? nb_receivers_ : 0, -1);
+  int nbArrived = 0;
+  int lastArrival = -1;  // pas ou le dernier recepteur a ete atteint
+  planned_steps_ = num_sample_;
 
   double sliceWriteTime = 0.0;     // secondes passées à écrire les slices
   int sliceCount = 0;              // nombre de slices écrites
@@ -477,6 +490,49 @@ void SEMproxy::run()
 #endif
     totalOutputTime += std::chrono::duration_cast<system_clock::duration>(
         std::chrono::steady_clock::now() - startOutputTime);
+
+    // TP3 : arret anticipe. Le test ne lit que pnAtReceiver (deja sur l'hote) ;
+    // il est fait a la fin du pas, quand toutes les sorties du pas sont ecrites.
+    if (stopOn)
+    {
+      const auto startStop = std::chrono::steady_clock::now();
+      for (int r = 0; r < nb_receivers_; r++)
+        if (arrivalStep[r] < 0 &&
+            std::fabs(pnAtReceiver(r, indexTimeSample)) > opt_.stop_threshold)
+        {
+          arrivalStep[r] = indexTimeSample;
+          if (++nbArrived == nb_receivers_) lastArrival = indexTimeSample;
+        }
+      const bool arret = lastArrival >= 0 &&
+                         indexTimeSample >= lastArrival + stopDelaySteps &&
+                         indexTimeSample + 1 < num_sample_;
+      stop_check_s_ += std::chrono::duration<double>(
+                           std::chrono::steady_clock::now() - startStop)
+                           .count();
+      if (arret)
+      {
+        stop_step_ = indexTimeSample;
+        stop_reason_ = "receivers";
+        break;
+      }
+    }
+  }
+
+  // Arret anticipe : la suite (sismos, analyses de fin, metriques) ne porte que
+  // sur les pas vraiment calcules.
+  if (stop_step_ >= 0)
+  {
+    num_sample_ = stop_step_ + 1;
+    std::cout << "---- Early stop         : step " << stop_step_ << " (t = "
+              << stop_step_ * dt_ << " s) instead of " << planned_steps_
+              << " steps, last receiver reached at step " << lastArrival
+              << ", " << 100.0 * (planned_steps_ - num_sample_) / planned_steps_
+              << " % of the steps saved." << std::endl;
+  }
+  else if (stopOn)
+  {
+    std::cout << "---- Early stop         : not triggered (" << nbArrived << "/"
+              << nb_receivers_ << " receivers reached)." << std::endl;
   }
   
   const auto tWrite0 = std::chrono::steady_clock::now();
@@ -907,7 +963,9 @@ void SEMproxy::writeMetrics(double computeTime, double snapshotWriteTime,
             "insitu_vel_s,insitu_write_s,seismo_extract_time_s,"
             "snapshot_copy_s,insitu_copy_s,"
             "trigger_threshold,trigger_count,trigger_bytes,trigger_write_time_s,"
-            "trigger_copy_s,trigger_sync_time_s,trigger_check_time_s\n";
+            "trigger_copy_s,trigger_sync_time_s,trigger_check_time_s,"
+            "stop_after_receivers,stop_threshold,stop_reason,stop_step,"
+            "planned_steps,stop_check_time_s\n";
   }
   file << std::setprecision(9) << opt_.ex << ',' << opt_.ey << ',' << opt_.ez
        << ',' << opt_.order << ',' << m_mesh->getNumberOfNodes() << ','
@@ -929,7 +987,10 @@ void SEMproxy::writeMetrics(double computeTime, double snapshotWriteTime,
        << ',' << insitu_write_s_ << ',' << seismo_extract_s_ << ',' << snapshotCopyTime_ << ',' << insitu_copy_s_ << ','
        << opt_.trigger_threshold << ',' << trigger_count_ << ','
        << trigger_bytes_ << ',' << trigger_write_s_ << ',' << trigger_copy_s_
-       << ',' << trigger_sync_s_ << ',' << trigger_check_s_ << '\n';
+       << ',' << trigger_sync_s_ << ',' << trigger_check_s_ << ','
+       << opt_.stop_after_receivers << ',' << opt_.stop_threshold << ','
+       << stop_reason_ << ',' << stop_step_ << ',' << planned_steps_ << ','
+       << stop_check_s_ << '\n';
 }
 
 // Initialize arrays

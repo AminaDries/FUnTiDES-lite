@@ -138,6 +138,11 @@ class SEMproxy
   double trigger_copy_s_ = 0.0;          // dont copie GPU -> hote (sonde)
   double trigger_sync_s_ = 0.0;          // dont fsync
   double trigger_check_s_ = 0.0;         // temps du test de declenchement
+  // TP3 : arret anticipe
+  int planned_steps_ = 0;                // pas prevus (timemax / dt)
+  int stop_step_ = -1;                   // dernier pas calcule si arret anticipe
+  std::string stop_reason_ = "none";     // none | receivers
+  double stop_check_s_ = 0.0;            // temps du test d'arret
   double insitu_stats_s_ = 0.0;  // temps in-situ stats (boucle)
   double insitu_hist_s_ = 0.0;   // temps in-situ histogramme (boucle)
   double insitu_vel_s_ = 0.0;    // temps in-situ pics par noeud (boucle)
