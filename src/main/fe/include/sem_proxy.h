@@ -90,7 +90,13 @@ class SEMproxy
   //void saveSnapshot(int timestep)
   // :: void saveSnapshot(int timestep, const arrayReal& field);
   
-  std::size_t saveSnapshot(int timestep, const arrayReal& field);  
+  std::size_t saveSnapshot(int timestep, const arrayReal& field);
+  // meme ecriture, dans un dossier donne, avec ses propres compteurs
+  // (copie GPU->hote et fsync) : sert aussi aux snapshots declenches du TP3
+  std::size_t saveSnapshot(int timestep, const arrayReal& field,
+                           const std::string& folder, double& syncTime,
+                           double& copyTime);
+  void writeTriggers(const std::vector<int>& triggerStep) const;
   std::size_t saveSlice(int timestep, const arrayReal& field,
                         double& extractTime, double& writeTime,
                         double& fsyncTime);
@@ -125,6 +131,13 @@ class SEMproxy
   double insitu_sismos_final_s_ = 0.0;  // temps in-situ sismos en fin de simulation
   double seismo_fsync_s_ = 0.0;         // temps du fsync de seismos.csv
   double seismo_extract_s_ = 0.0;       // temps d'extraction des recepteurs (tous les pas)
+  // TP3 : snapshots declenches par l'arrivee de l'onde aux recepteurs
+  int trigger_count_ = 0;                // nombre de snapshots declenches
+  std::size_t trigger_bytes_ = 0;        // volume ecrit
+  double trigger_write_s_ = 0.0;         // temps total d'ecriture (copie et fsync compris)
+  double trigger_copy_s_ = 0.0;          // dont copie GPU -> hote (sonde)
+  double trigger_sync_s_ = 0.0;          // dont fsync
+  double trigger_check_s_ = 0.0;         // temps du test de declenchement
   double insitu_stats_s_ = 0.0;  // temps in-situ stats (boucle)
   double insitu_hist_s_ = 0.0;   // temps in-situ histogramme (boucle)
   double insitu_vel_s_ = 0.0;    // temps in-situ pics par noeud (boucle)

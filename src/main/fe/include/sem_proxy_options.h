@@ -55,6 +55,9 @@ class SemProxyOptions
   std::string insitu_vel_file = "insitu_vel.csv";
   bool fsync_snapshots = false;
   bool no_seismos = false;                             // reference : pas de sismos
+  // TP3 : snapshot declenche quand le front d'onde atteint un recepteur
+  double trigger_threshold = 0.0;          // seuil absolu sur |p| (0 = desactive)
+  std::string trigger_folder = "triggers"; // dossier des snapshots declenches
   bool quiet = false;  
   bool insitu_sismos = false;                          // stats des sismos en flux ?
   std::string insitu_sismos_file = "insitu_sismos.csv"; // fichier de sortie
@@ -69,6 +72,8 @@ class SemProxyOptions
       throw std::runtime_error("lx/ly/lz must be > 0");
     if (snap_interval <= 0)
       throw std::runtime_error("snap-interval must be > 0");
+    if (trigger_threshold < 0)
+      throw std::runtime_error("trigger-threshold must be >= 0");
     if (insitu_interval <= 0)                                          
       throw std::runtime_error("insitu-interval must be > 0"); 
         if (insitu_mode != "device" && insitu_mode != "host")
@@ -166,6 +171,10 @@ class SemProxyOptions
         "quiet", "Disable periodic debug output of pnGlobal",
         cxxopts::value<bool>(o.quiet))(
         "insitu-sismos-file", "CSV file where in-situ seismogram stats are written",
-        cxxopts::value<std::string>(o.insitu_sismos_file));
+        cxxopts::value<std::string>(o.insitu_sismos_file))(
+        "trigger-threshold", "Write a snapshot when |p| at a receiver first exceeds this value (0 = off)",
+        cxxopts::value<double>(o.trigger_threshold))(
+        "trigger-folder", "Folder where triggered snapshots and triggers.csv are written",
+        cxxopts::value<std::string>(o.trigger_folder));
       }
 };

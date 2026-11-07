@@ -55,6 +55,10 @@ SEMproxy::SEMproxy(const SemProxyOptions& opt)
 
   if (opt.no_seismos && opt.insitu_sismos)
     throw std::runtime_error("--no-seismos et --insitu-sismos sont incompatibles");
+  if (opt.no_seismos && opt.trigger_threshold > 0)
+    throw std::runtime_error("--no-seismos et --trigger-threshold sont incompatibles");
+  if (opt.trigger_threshold > 0)
+    std::filesystem::create_directories(opt.trigger_folder);
 
   seismo_dir_ = opt.seismo_dir;
   readReceivers(opt.receivers_file, opt);
@@ -222,6 +226,10 @@ void SEMproxy::run()
   double insituSismosTime = 0.0;
   double seismoExtractTime = 0.0;  // extraction des recepteurs (dont migration UVM)                   
 
+  // TP3 : declenchement. -1 = recepteur pas encore atteint par l'onde.
+  const bool trigger = opt_.trigger_threshold > 0;
+  std::vector<int> triggerStep(trigger ? nb_receivers_ : 0, -1);
+
   double sliceWriteTime = 0.0;     // secondes passées à écrire les slices
   int sliceCount = 0;              // nombre de slices écrites
   std::size_t sliceBytes = 0;      // octets écrits au total (slices)
@@ -280,6 +288,37 @@ void SEMproxy::run()
       seismoExtractTime += std::chrono::duration<double>(
                                std::chrono::steady_clock::now() - startExtract)
                                .count();
+    }
+
+    // TP3 : declenchement sur evenement. Un recepteur est "atteint" au premier
+    // pas ou |p| depasse le seuil absolu ; on ecrit alors un snapshot (un seul
+    // si plusieurs recepteurs sont atteints au meme pas). Le test ne lit que
+    // pnAtReceiver, deja sur l'hote : il ne coute presque rien.
+    if (trigger)
+    {
+      const auto startCheck = std::chrono::steady_clock::now();
+      bool declenche = false;
+      for (int r = 0; r < nb_receivers_; r++)
+        if (triggerStep[r] < 0 &&
+            std::fabs(pnAtReceiver(r, indexTimeSample)) > opt_.trigger_threshold)
+        {
+          triggerStep[r] = indexTimeSample;
+          declenche = true;
+        }
+      trigger_check_s_ += std::chrono::duration<double>(
+                              std::chrono::steady_clock::now() - startCheck)
+                              .count();
+      if (declenche)
+      {
+        const auto startWrite = std::chrono::steady_clock::now();
+        trigger_bytes_ += saveSnapshot(indexTimeSample, solverData.m_pnGlobal,
+                                       opt_.trigger_folder, trigger_sync_s_,
+                                       trigger_copy_s_);
+        trigger_write_s_ += std::chrono::duration<double>(
+                                std::chrono::steady_clock::now() - startWrite)
+                                .count();
+        trigger_count_++;
+      }
     }
 
     // Sismos in-situ : on ajoute la valeur de ce pas a chaque accumulateur.
@@ -576,6 +615,14 @@ void SEMproxy::run()
 
   seismo_extract_s_ = seismoExtractTime;  // pour metrics.csv
 
+  if (trigger)
+  {
+    writeTriggers(triggerStep);
+    std::cout << "---- Triggered snapshots : " << trigger_count_ << " ("
+              << trigger_bytes_ << " bytes, " << trigger_write_s_
+              << " s write, " << trigger_check_s_ << " s check)." << std::endl;
+  }
+
   if (!opt_.no_seismos)
   {
     std::cout << "---- Seismo extract time : " << seismoExtractTime
@@ -633,6 +680,16 @@ void SEMproxy::run()
 // Écrit un snapshot : un fichier CSV avec la pression de tous les noeuds
 std::size_t SEMproxy::saveSnapshot(int timestep, const arrayReal& field)
 {
+  return saveSnapshot(timestep, field, snap_folder_, snapshotSyncTime_,
+                      snapshotCopyTime_);
+}
+
+// Meme ecriture, dans un dossier donne, avec ses propres compteurs (utilise
+// aussi par les snapshots declenches du TP3, pour ne pas les melanger).
+std::size_t SEMproxy::saveSnapshot(int timestep, const arrayReal& field,
+                                   const std::string& folder, double& syncTime,
+                                   double& copyTime)
+{
   {
     // sonde (sujet) : 1re lecture du champ par le CPU = migration GPU -> hote
 #ifdef USE_KOKKOS
@@ -642,12 +699,12 @@ std::size_t SEMproxy::saveSnapshot(int timestep, const arrayReal& field)
     double touch = 0.0;
     for (int n = 0; n < m_mesh->getNumberOfNodes(); n++) touch += field(n, i1);
     touchSink_ += touch;
-    snapshotCopyTime_ += std::chrono::duration<double>(
-                             std::chrono::steady_clock::now() - startCopy)
-                             .count();
+    copyTime += std::chrono::duration<double>(
+                    std::chrono::steady_clock::now() - startCopy)
+                    .count();
   }
   std::ostringstream name;
-  name << snap_folder_ << "/snapshot_" << std::setw(6) << std::setfill('0')
+  name << folder << "/snapshot_" << std::setw(6) << std::setfill('0')
        << timestep << ".csv";
 
   std::ofstream file(name.str());
@@ -671,11 +728,30 @@ std::size_t SEMproxy::saveSnapshot(int timestep, const arrayReal& field)
       ::fsync(fd);  // force l'ecriture reelle sur le disque
       ::close(fd);
     }
-    snapshotSyncTime_ += std::chrono::duration<double>(
-                             std::chrono::steady_clock::now() - t0)
-                             .count();
+    syncTime += std::chrono::duration<double>(
+                    std::chrono::steady_clock::now() - t0)
+                    .count();
   }
   return bytes;  // octets écrits
+}
+
+// TP3 : pas de declenchement de chaque recepteur (-1 = jamais atteint)
+void SEMproxy::writeTriggers(const std::vector<int>& triggerStep) const
+{
+  const std::string nom = opt_.trigger_folder + "/triggers.csv";
+  std::ofstream out(nom);
+  if (!out) throw std::runtime_error("Cannot open " + nom);
+  out << std::setprecision(9) << "receiver,x,y,z,distance,step,t\n";
+  for (int r = 0; r < nb_receivers_; r++)
+  {
+    const double dx = rcv_coords_[r][0] - src_coord_[0];
+    const double dy = rcv_coords_[r][1] - src_coord_[1];
+    const double dz = rcv_coords_[r][2] - src_coord_[2];
+    out << r << ',' << rcv_coords_[r][0] << ',' << rcv_coords_[r][1] << ','
+        << rcv_coords_[r][2] << ',' << std::sqrt(dx * dx + dy * dy + dz * dz)
+        << ',' << triggerStep[r] << ','
+        << (triggerStep[r] < 0 ? -1.0 : triggerStep[r] * dt_) << '\n';
+  }
 }
 
 // Statistiques en flux du champ de pression, calculees sur l'hote (CPU).
@@ -829,7 +905,9 @@ void SEMproxy::writeMetrics(double computeTime, double snapshotWriteTime,
             "slice_count,slice_bytes,slice_extract_time_s,slice_fsync_time_s,"
             "fsync,snapshot_sync_time_s,insitu_stats_s,insitu_hist_s,"
             "insitu_vel_s,insitu_write_s,seismo_extract_time_s,"
-            "snapshot_copy_s,insitu_copy_s\n";
+            "snapshot_copy_s,insitu_copy_s,"
+            "trigger_threshold,trigger_count,trigger_bytes,trigger_write_time_s,"
+            "trigger_copy_s,trigger_sync_time_s,trigger_check_time_s\n";
   }
   file << std::setprecision(9) << opt_.ex << ',' << opt_.ey << ',' << opt_.ez
        << ',' << opt_.order << ',' << m_mesh->getNumberOfNodes() << ','
@@ -848,7 +926,10 @@ void SEMproxy::writeMetrics(double computeTime, double snapshotWriteTime,
        << ',' << sliceExtractTime << ',' << sliceFsyncTime << ','
        << (opt_.fsync_snapshots ? 1 : 0) << ',' << snapshotSyncTime_ << ','
        << insitu_stats_s_ << ',' << insitu_hist_s_ << ',' << insitu_vel_s_
-       << ',' << insitu_write_s_ << ',' << seismo_extract_s_ << ',' << snapshotCopyTime_ << ',' << insitu_copy_s_ << '\n';
+       << ',' << insitu_write_s_ << ',' << seismo_extract_s_ << ',' << snapshotCopyTime_ << ',' << insitu_copy_s_ << ','
+       << opt_.trigger_threshold << ',' << trigger_count_ << ','
+       << trigger_bytes_ << ',' << trigger_write_s_ << ',' << trigger_copy_s_
+       << ',' << trigger_sync_s_ << ',' << trigger_check_s_ << '\n';
 }
 
 // Initialize arrays
