@@ -1,6 +1,7 @@
 #include <cmath>
 #include <cstdio>
 #include <random>
+#include <vector>
 
 #include "field_codec.h"
 
@@ -88,6 +89,42 @@ int main()
     VERIFIE(s == 0.f, "champ constant : echelle nulle");
     VERIFIE(quantize(0.f, 0.f, s, L) == 0, "champ constant : q = 0");
     VERIFIE(dequantize(0, 0.f, 0.f, L) == 0.f, "champ constant : reconstruit = vmin");
+  }
+
+  for (std::size_t w : {1u, 2u, 4u})
+  {
+    std::vector<std::uint8_t> data;
+    std::uniform_int_distribution<int> val(0, 255), len(1, 5000);
+    while (data.size() < 100000 * w)
+    {
+      const int run = len(gen);
+      std::uint8_t v[4] = {static_cast<std::uint8_t>(val(gen)), static_cast<std::uint8_t>(val(gen)),
+                           static_cast<std::uint8_t>(val(gen)), static_cast<std::uint8_t>(val(gen))};
+      for (int r = 0; r < run && data.size() < 100000 * w; r++)
+        data.insert(data.end(), v, v + w);
+    }
+    const std::size_t n = data.size() / w;
+    std::vector<std::uint8_t> enc, dec(data.size());
+    rle_encode(data.data(), n, w, enc);
+    const std::size_t k = rle_decode(enc.data(), enc.size(), w, dec.data(), n);
+    VERIFIE(k == n && dec == data, "RLE : aller-retour exact");
+    std::printf("RLE largeur %zu : %zu octets -> %zu octets\n", w, data.size(), enc.size());
+  }
+  {
+    std::vector<std::uint8_t> zeros(100000, 0), enc, dec(100000);
+    rle_encode(zeros.data(), zeros.size(), 1, enc);
+    VERIFIE(enc.size() == 4, "RLE : 100000 zeros -> 4 octets");
+    VERIFIE(rle_decode(enc.data(), enc.size(), 1, dec.data(), dec.size()) == dec.size() && dec == zeros,
+            "RLE : zeros restitues");
+    std::vector<std::uint8_t> alt(1000), enc2;
+    for (std::size_t i = 0; i < alt.size(); i++) alt[i] = static_cast<std::uint8_t>(i % 2);
+    rle_encode(alt.data(), alt.size(), 1, enc2);
+    VERIFIE(enc2.size() == 2 * alt.size(), "RLE : sans repetition, taille doublee");
+    std::vector<std::uint8_t> un(1, 7), enc3, dec3(1);
+    rle_encode(un.data(), 1, 1, enc3);
+    VERIFIE(rle_decode(enc3.data(), enc3.size(), 1, dec3.data(), 1) == 1 && dec3 == un, "RLE : une valeur");
+    VERIFIE(rle_decode(enc.data(), enc.size() - 1, 1, dec.data(), dec.size()) < dec.size(),
+            "RLE : flux tronque detecte");
   }
 
   std::printf(echecs ? "\n%d ECHEC(S)\n" : "\nTous les tests passent.\n", echecs);

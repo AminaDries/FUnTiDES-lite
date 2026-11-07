@@ -134,6 +134,7 @@ class SEMproxy
   double insitu_copy_s_ = 0.0;     // sonde : idem pour les stats in-situ en mode host
   bool snapCoordsWritten_ = false;
   double snapshotEncodeTime_ = 0.0;
+  double snapshotRleTime_ = 0.0;
   double touchSink_ = 0.0;         // empeche le compilateur de supprimer la boucle de sonde
   std::string seismo_dir_;
 

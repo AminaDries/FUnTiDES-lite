@@ -1,6 +1,7 @@
 #pragma once
 #include <cstdint>
 #include <cstring>
+#include <vector>
 
 #ifdef KOKKOS_INLINE_FUNCTION
 #define FC_INLINE KOKKOS_INLINE_FUNCTION
@@ -144,6 +145,54 @@ FC_INLINE float dequantize(std::uint32_t q, float vmin, float vmax,
   return levels ? vmin + static_cast<float>(q) *
                              ((vmax - vmin) / static_cast<float>(levels))
                 : vmin;
+}
+
+constexpr std::uint32_t RLE_FLAG = 0x100u;
+
+inline void rle_encode(const std::uint8_t* data, std::size_t n, std::size_t w,
+                       std::vector<std::uint8_t>& out)
+{
+  out.clear();
+  std::size_t i = 0;
+  while (i < n)
+  {
+    std::size_t j = i + 1;
+    while (j < n && std::memcmp(data + j * w, data + i * w, w) == 0) j++;
+    std::size_t run = j - i;
+    while (run >= 0x80)
+    {
+      out.push_back(static_cast<std::uint8_t>(run | 0x80));
+      run >>= 7;
+    }
+    out.push_back(static_cast<std::uint8_t>(run));
+    out.insert(out.end(), data + i * w, data + (i + 1) * w);
+    i = j;
+  }
+}
+
+inline std::size_t rle_decode(const std::uint8_t* in, std::size_t bytes,
+                              std::size_t w, std::uint8_t* out, std::size_t n)
+{
+  std::size_t i = 0, k = 0;
+  while (i < bytes)
+  {
+    std::size_t run = 0;
+    int shift = 0;
+    while (true)
+    {
+      if (i >= bytes) return k;
+      const std::uint8_t b = in[i++];
+      run |= static_cast<std::size_t>(b & 0x7Fu) << shift;
+      if (b < 0x80u) break;
+      shift += 7;
+    }
+    if (i + w > bytes || k + run > n) return k;
+    for (std::size_t r = 0; r < run; r++)
+      std::memcpy(out + (k + r) * w, in + i, w);
+    i += w;
+    k += run;
+  }
+  return k;
 }
 
 }

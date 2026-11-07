@@ -35,7 +35,8 @@ class SemProxyOptions
   int snap_interval = 20;                 
   std::string snap_folder = "snapshots";
   std::string snap_format = "csv";
-  std::string quant_where = "device";     
+  std::string quant_where = "device";
+  bool snap_rle = false;     
 
   // slices
   bool slices = false;                    // faut-il sauvegarder des slices?
@@ -76,6 +77,8 @@ class SemProxyOptions
       throw std::runtime_error("snap-format must be csv, bin, f16, q8 or q16");
     if (quant_where != "device" && quant_where != "host")
       throw std::runtime_error("quant-where must be device or host");
+    if (snap_rle && snap_format == "csv")
+      throw std::runtime_error("snap-rle needs a binary snap-format");
     if (insitu_interval <= 0)                                          
       throw std::runtime_error("insitu-interval must be > 0"); 
         if (insitu_mode != "device" && insitu_mode != "host")
@@ -138,6 +141,8 @@ class SemProxyOptions
         cxxopts::value<std::string>(o.snap_format))(
         "quant-where", "Where f16/q8/q16 encoding runs: device | host",
         cxxopts::value<std::string>(o.quant_where))(
+        "snap-rle", "Lossless run-length encoding of binary snapshot data",
+        cxxopts::value<bool>(o.snap_rle))(
         "slices", "Save a 2D slice of the wave field (CSV)",
         cxxopts::value<bool>(o.slices))(
         "slice-axis", "Axis perpendicular to the slice: x|y|z",

@@ -855,9 +855,27 @@ std::size_t SEMproxy::saveSnapshotBin(int timestep, const arrayReal& field)
   std::ofstream file(name.str(), std::ios::binary);
   if (!file) throw std::runtime_error("Cannot open " + name.str());
 
+  std::vector<std::uint8_t> rleBuf;
+  std::uint32_t codecId = codec;
+  if (opt_.snap_rle)
+  {
+    const auto tRle0 = std::chrono::steady_clock::now();
+    field_codec::rle_encode(reinterpret_cast<const std::uint8_t*>(payload), N,
+                            payloadBytes / N, rleBuf);
+    snapshotRleTime_ += std::chrono::duration<double>(
+                            std::chrono::steady_clock::now() - tRle0)
+                            .count();
+    if (rleBuf.size() < payloadBytes)
+    {
+      payload = reinterpret_cast<const char*>(rleBuf.data());
+      payloadBytes = rleBuf.size();
+      codecId |= field_codec::RLE_FLAG;
+    }
+  }
+
   const field_codec::Header hd = field_codec::make_header(
       static_cast<std::uint32_t>(nbNodes), static_cast<std::uint32_t>(timestep),
-      codec, nbits, vmin, vmax);
+      static_cast<field_codec::Codec>(codecId), nbits, vmin, vmax);
   file.write(reinterpret_cast<const char*>(&hd), sizeof(hd));
   file.write(payload, static_cast<std::streamsize>(payloadBytes));
   bytes += static_cast<std::size_t>(file.tellp());
@@ -1025,7 +1043,7 @@ void SEMproxy::writeMetrics(double computeTime, double snapshotWriteTime,
             "slice_count,slice_bytes,slice_extract_time_s,slice_fsync_time_s,"
             "fsync,snapshot_sync_time_s,insitu_stats_s,insitu_hist_s,"
             "insitu_vel_s,insitu_write_s,seismo_extract_time_s,"
-            "snapshot_copy_s,insitu_copy_s,snap_format,snap_encode_s\n";
+            "snapshot_copy_s,insitu_copy_s,snap_format,snap_encode_s,snap_rle,snap_rle_s\n";
   }
   file << std::setprecision(9) << opt_.ex << ',' << opt_.ey << ',' << opt_.ez
        << ',' << opt_.order << ',' << m_mesh->getNumberOfNodes() << ','
@@ -1045,7 +1063,8 @@ void SEMproxy::writeMetrics(double computeTime, double snapshotWriteTime,
        << (opt_.fsync_snapshots ? 1 : 0) << ',' << snapshotSyncTime_ << ','
        << insitu_stats_s_ << ',' << insitu_hist_s_ << ',' << insitu_vel_s_
        << ',' << insitu_write_s_ << ',' << seismo_extract_s_ << ',' << snapshotCopyTime_ << ',' << insitu_copy_s_ << ',' << opt_.snap_format
-       << ',' << snapshotEncodeTime_ << '\n';
+       << ',' << snapshotEncodeTime_ << ',' << (opt_.snap_rle ? 1 : 0)
+       << ',' << snapshotRleTime_ << '\n';
 }
 
 // Initialize arrays
