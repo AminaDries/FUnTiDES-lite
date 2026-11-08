@@ -17,6 +17,16 @@
 #include <string>
 #include <vector>
 
+
+// Fonctions utilisables sur CPU et sur GPU.
+// Avec Kokkos : KOKKOS_INLINE_FUNCTION (le GPU a le droit de les appeler).
+// Sans Kokkos (ex. test_ppm.cpp) : une fonction inline normale.
+#ifdef KOKKOS_INLINE_FUNCTION
+#define PPM_FUNC KOKKOS_INLINE_FUNCTION
+#else
+#define PPM_FUNC inline
+#endif
+
 namespace ppm
 {
 
@@ -32,11 +42,13 @@ struct RGB
 // Le champ de pression est signe. On utilise des bornes symetriques [-bound, bound] :
 // 0 tombe toujours au milieu de la palette (blanc en coolwarm).
 // Les valeurs hors bornes sont ecretees a -1 ou 1.
-inline float normalize_symmetric(float p, float bound)
+PPM_FUNC float normalize_symmetric(float p, float bound)
 {
   if (bound <= 0.f) return 0.f;
-  const float v = p / bound;
-  return std::max(-1.f, std::min(1.f, v));
+  float v = p / bound;
+  if (v > 1.f) v = 1.f;
+  if (v < -1.f) v = -1.f;
+  return v;
 }
 
 // ---------------------------------------------------------------------------
@@ -46,9 +58,9 @@ inline float normalize_symmetric(float p, float bound)
 // Interpolation lineaire entre 9 couleurs de reference de la palette coolwarm.
 // La luminosite est maximale en 0 et baisse de facon reguliere vers les deux
 // extremites : pas de fausses bandes de contraste (contrairement a "jet").
-inline RGB coolwarm(float v)
+PPM_FUNC RGB coolwarm(float v)
 {
-  static const float table[9][3] = {
+  const float table[9][3] = {
       {59, 76, 192},    // -1.00
       {98, 130, 234},   // -0.75
       {141, 176, 254},  // -0.50
@@ -61,17 +73,19 @@ inline RGB coolwarm(float v)
   };
 
   if (!(v == v)) v = 0.f;  // NaN -> milieu de la palette
-  v = std::max(-1.f, std::min(1.f, v));
+  if (v > 1.f) v = 1.f;
+  if (v < -1.f) v = -1.f;
 
   const float pos = (v + 1.f) * 4.f;  // [-1, 1] -> [0, 8]
   int i = static_cast<int>(pos);
   if (i >= 8) i = 7;
   const float t = pos - static_cast<float>(i);
 
+  // arrondi : + 0.5 puis partie entiere (les valeurs sont toujours >= 0)
   RGB c;
-  c.r = static_cast<std::uint8_t>(std::lround(table[i][0] + t * (table[i + 1][0] - table[i][0])));
-  c.g = static_cast<std::uint8_t>(std::lround(table[i][1] + t * (table[i + 1][1] - table[i][1])));
-  c.b = static_cast<std::uint8_t>(std::lround(table[i][2] + t * (table[i + 1][2] - table[i][2])));
+  c.r = static_cast<std::uint8_t>(table[i][0] + t * (table[i + 1][0] - table[i][0]) + 0.5f);
+  c.g = static_cast<std::uint8_t>(table[i][1] + t * (table[i + 1][1] - table[i][1]) + 0.5f);
+  c.b = static_cast<std::uint8_t>(table[i][2] + t * (table[i + 1][2] - table[i][2]) + 0.5f);
   return c;
 }
 
