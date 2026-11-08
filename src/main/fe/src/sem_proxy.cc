@@ -893,6 +893,19 @@ std::size_t SEMproxy::saveSliceImage(int timestep, const arrayReal& field)
   {
     const auto t = std::chrono::steady_clock::now();
     initSliceImage();
+#ifdef USE_KOKKOS
+    // mode device : copier la table sur le GPU et reserver la place de l'image
+    if (is_slice_image_ && opt_.image_mode == "device")
+    {
+      const int np = static_cast<int>(pix2node_.size());
+      pix2nodeD_ = Kokkos::View<int*>("pix2nodeD", np);
+      imgD_ = Kokkos::View<unsigned char*>("imgD", 3 * np);
+      Kokkos::View<const int*, Kokkos::HostSpace,
+                   Kokkos::MemoryTraits<Kokkos::Unmanaged>>
+          tableCPU(pix2node_.data(), np);
+      Kokkos::deep_copy(pix2nodeD_, tableCPU);
+    }
+#endif
     image_init_s_ += std::chrono::duration<double>(
                          std::chrono::steady_clock::now() - t).count();
     if (!is_slice_image_) return 0;  // aucun noeud sur le plan
