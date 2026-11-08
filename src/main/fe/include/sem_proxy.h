@@ -161,6 +161,11 @@ class SEMproxy
   double image_fsync_s_ = 0.0;         // temps du fsync
   int image_count_ = 0;                // nombre d'images ecrites
   std::size_t image_bytes_ = 0;        // octets ecrits au total
+  double image_copy_s_ = 0.0;          // transfert image GPU -> CPU (mode device)
+#ifdef USE_KOKKOS
+  Kokkos::View<int*> pix2nodeD_;       // table pixel -> noeud, en memoire GPU
+  Kokkos::View<unsigned char*> imgD_;  // image (3 octets par pixel), en memoire GPU
+#endif
 
   // physics
   bool isElastic_;
