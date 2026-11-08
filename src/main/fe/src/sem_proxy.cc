@@ -911,19 +911,45 @@ std::size_t SEMproxy::saveSliceImage(int timestep, const arrayReal& field)
     if (!is_slice_image_) return 0;  // aucun noeud sur le plan
   }
 
-  // --- 1. lecture du champ ---
+  // --- 1. lecture du champ + max de |p| ---
 #ifdef USE_KOKKOS
   Kokkos::fence();  // annexe 1 : le calcul du pas est fini
 #endif
   const auto t0 = std::chrono::steady_clock::now();
 
   const std::size_t np = pix2node_.size();
-  std::vector<float> vals(np);
+  const bool onDevice = (opt_.image_mode == "device");
+  std::vector<float> vals;  // pressions lues par le CPU (mode host)
   float localMax = 0.f;
-  for (std::size_t k = 0; k < np; k++)
+
+  if (!onDevice)
   {
-    vals[k] = field(pix2node_[k], i1);
-    localMax = std::max(localMax, std::abs(vals[k]));
+    // CPU : le CPU lit les pressions du plan dans pnGlobal
+    vals.resize(np);
+    for (std::size_t k = 0; k < np; k++)
+    {
+      vals[k] = field(pix2node_[k], i1);
+      localMax = std::max(localMax, std::abs(vals[k]));
+    }
+  }
+  else
+  {
+#ifdef USE_KOKKOS
+    // GPU : chaque fil lit un pixel, on garde le plus grand |p|
+    const auto tab = pix2nodeD_;
+    const auto f = field;
+    const int col = i1;
+    Kokkos::parallel_reduce(
+        "imageMax", static_cast<int>(np),
+        KOKKOS_LAMBDA(const int k, float& m) {
+          const float p = f(tab(k), col);
+          const float a = (p < 0.f) ? -p : p;
+          if (a > m) m = a;
+        },
+        Kokkos::Max<float>(localMax));
+#else
+    throw std::runtime_error("--image-mode device needs a Kokkos build");
+#endif
   }
 
   // --- 2. borne : bornes symetriques [-bound, bound], 0 au centre ---
@@ -938,21 +964,58 @@ std::size_t SEMproxy::saveSliceImage(int timestep, const arrayReal& field)
 
   // --- 3. couleurs ---
   std::vector<ppm::RGB> pixels(np);
-  for (std::size_t k = 0; k < np; k++)
-    pixels[k] = ppm::coolwarm(ppm::normalize_symmetric(vals[k], bound));
+  if (!onDevice)
+  {
+    for (std::size_t k = 0; k < np; k++)
+      pixels[k] = ppm::coolwarm(ppm::normalize_symmetric(vals[k], bound));
+  }
+#ifdef USE_KOKKOS
+  else
+  {
+    // GPU : 1 fil = 1 pixel, il ecrit ses 3 octets (R, G, B) dans imgD_
+    const auto tab = pix2nodeD_;
+    const auto img = imgD_;
+    const auto f = field;
+    const int col = i1;
+    const float b = bound;
+    Kokkos::parallel_for(
+        "imageColors", static_cast<int>(np), KOKKOS_LAMBDA(const int k) {
+          const ppm::RGB c =
+              ppm::coolwarm(ppm::normalize_symmetric(f(tab(k), col), b));
+          img(3 * k) = c.r;
+          img(3 * k + 1) = c.g;
+          img(3 * k + 2) = c.b;
+        });
+    Kokkos::fence();  // annexe 1 : couleurs vraiment finies
+  }
+#endif
 
   const auto t1 = std::chrono::steady_clock::now();
   image_extract_s_ += std::chrono::duration<double>(t1 - t0).count();
 
+  // --- 3 bis. transfert de l'image GPU -> CPU (mode device) ---
+#ifdef USE_KOKKOS
+  if (onDevice)
+  {
+    static_assert(sizeof(ppm::RGB) == 3, "RGB doit faire 3 octets");
+    Kokkos::View<unsigned char*, Kokkos::HostSpace,
+                 Kokkos::MemoryTraits<Kokkos::Unmanaged>>
+        imgCPU(reinterpret_cast<unsigned char*>(pixels.data()), 3 * np);
+    Kokkos::deep_copy(imgCPU, imgD_);
+    image_copy_s_ += std::chrono::duration<double>(
+                         std::chrono::steady_clock::now() - t1).count();
+  }
+#endif
+
   // --- 4. ecriture ---
+  const auto tw = std::chrono::steady_clock::now();
   std::ostringstream name;
   name << opt_.image_folder << "/slice_" << std::setw(6) << std::setfill('0')
        << timestep << ".ppm";
   const std::size_t bytes = ppm::write_ppm(name.str(), pixels, img_w_, img_h_,
                                            opt_.image_format == "p6");
   const auto t2 = std::chrono::steady_clock::now();
-  image_write_s_ += std::chrono::duration<double>(t2 - t1).count();
-
+  image_write_s_ += std::chrono::duration<double>(t2 - tw).count();
   // --- 5. fsync ---
   syncFile(name.str());
   image_fsync_s_ += std::chrono::duration<double>(
