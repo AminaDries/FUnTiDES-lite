@@ -48,7 +48,7 @@ class SemProxyOptions
   std::string image_norm = "local";       // local, running ou fixed
   float image_bound = 0.f;                // borne de |p| si image_norm = fixed
   std::string image_folder = "images";    // dossier des images
-
+  std::string image_mode = "host";        // host (CPU) ou device (GPU)
   std::string metrics_file = "";
 
   bool insitu_stats = false;                      
@@ -92,7 +92,9 @@ class SemProxyOptions
     if (image_norm != "local" && image_norm != "running" && image_norm != "fixed")
       throw std::runtime_error("image-norm must be local, running or fixed");
     if (image_norm == "fixed" && image_bound <= 0.f)
-      throw std::runtime_error("image-norm fixed needs --image-bound > 0");    
+      throw std::runtime_error("image-norm fixed needs --image-bound > 0");   
+    if (image_mode != "host" && image_mode != "device")
+      throw std::runtime_error("image-mode must be host or device");       
   }
 
   static void bind_cli(cxxopts::Options& opts, SemProxyOptions& o)
@@ -159,6 +161,8 @@ class SemProxyOptions
         cxxopts::value<float>(o.image_bound))(
         "image-folder", "Folder where PPM images are written",
         cxxopts::value<std::string>(o.image_folder))(
+        "image-mode", "Where colors are computed: host (CPU) | device (GPU)",
+        cxxopts::value<std::string>(o.image_mode))(
         "metrics-file", "CSV file where run metrics are appended",
         cxxopts::value<std::string>(o.metrics_file))(
         "insitu-stats", "Compute statistics in-situ (during the run)",
