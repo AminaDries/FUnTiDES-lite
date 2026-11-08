@@ -1016,6 +1016,7 @@ std::size_t SEMproxy::saveSliceImage(int timestep, const arrayReal& field)
                                            opt_.image_format == "p6");
   const auto t2 = std::chrono::steady_clock::now();
   image_write_s_ += std::chrono::duration<double>(t2 - tw).count();
+  
   // --- 5. fsync ---
   syncFile(name.str());
   image_fsync_s_ += std::chrono::duration<double>(
@@ -1064,7 +1065,7 @@ void SEMproxy::writeMetrics(double computeTime, double snapshotWriteTime,
             "snapshot_copy_s,insitu_copy_s,"
             "slice_image,image_format,image_norm,image_width,image_height,"
             "image_init_s,image_extract_s,image_write_s,image_fsync_s,"
-            "image_count,image_bytes\n";
+            "image_count,image_bytes,image_mode,image_copy_s\n";
   }
   file << std::setprecision(9) << opt_.ex << ',' << opt_.ey << ',' << opt_.ez
        << ',' << opt_.order << ',' << m_mesh->getNumberOfNodes() << ','
@@ -1088,6 +1089,7 @@ void SEMproxy::writeMetrics(double computeTime, double snapshotWriteTime,
        << opt_.image_norm << ',' << img_w_ << ',' << img_h_ << ','
        << image_init_s_ << ',' << image_extract_s_ << ',' << image_write_s_
        << ',' << image_fsync_s_ << ',' << image_count_ << ',' << image_bytes_
+       << ',' << opt_.image_mode << ',' << image_copy_s_
        << '\n';
 }
 
