@@ -1,0 +1,86 @@
+nohup: les entrées sont ignorées
+/home/benachour-souhila/.local/lib/python3.12/site-packages/matplotlib/projections/__init__.py:63: UserWarning: Unable to import Axes3D. This may be due to multiple versions of Matplotlib being installed (e.g. as a system package and as a pip package). As a result, the 3D projection is not available.
+  warnings.warn("Unable to import Axes3D. This may be due to multiple versions of "
+[S=50] chauffe
+[S=50] mode=ref run=1/5
+[S=50] mode=ref run=2/5
+[S=50] mode=ref run=3/5
+[S=50] mode=ref run=4/5
+[S=50] mode=ref run=5/5
+[S=50] mode=periodique run=1/5
+[S=50] mode=periodique run=2/5
+[S=50] mode=periodique run=3/5
+[S=50] mode=periodique run=4/5
+[S=50] mode=periodique run=5/5
+[S=50] mode=declenche run=1/5
+[S=50] mode=declenche run=2/5
+[S=50] mode=declenche run=3/5
+[S=50] mode=declenche run=4/5
+[S=50] mode=declenche run=5/5
+[S=50] mode=declenche_stop run=1/5
+[S=50] mode=declenche_stop run=2/5
+[S=50] mode=declenche_stop run=3/5
+[S=50] mode=declenche_stop run=4/5
+[S=50] mode=declenche_stop run=5/5
+[M=100] chauffe
+[M=100] mode=ref run=1/5
+[M=100] mode=ref run=2/5
+[M=100] mode=ref run=3/5
+[M=100] mode=ref run=4/5
+[M=100] mode=ref run=5/5
+[M=100] mode=periodique run=1/5
+[M=100] mode=periodique run=2/5
+[M=100] mode=periodique run=3/5
+[M=100] mode=periodique run=4/5
+[M=100] mode=periodique run=5/5
+[M=100] mode=declenche run=1/5
+[M=100] mode=declenche run=2/5
+[M=100] mode=declenche run=3/5
+[M=100] mode=declenche run=4/5
+[M=100] mode=declenche run=5/5
+[M=100] mode=declenche_stop run=1/5
+[M=100] mode=declenche_stop run=2/5
+[M=100] mode=declenche_stop run=3/5
+[M=100] mode=declenche_stop run=4/5
+[M=100] mode=declenche_stop run=5/5
+[L=200] chauffe
+[L=200] mode=ref run=1/5
+[L=200] mode=ref run=2/5
+[L=200] mode=ref run=3/5
+[L=200] mode=ref run=4/5
+[L=200] mode=ref run=5/5
+[L=200] mode=periodique run=1/5
+[L=200] mode=periodique run=2/5
+[L=200] mode=periodique run=3/5
+[L=200] mode=periodique run=4/5
+[L=200] mode=periodique run=5/5
+[L=200] mode=declenche run=1/5
+[L=200] mode=declenche run=2/5
+[L=200] mode=declenche run=3/5
+[L=200] mode=declenche run=4/5
+[L=200] mode=declenche run=5/5
+[L=200] mode=declenche_stop run=1/5
+[L=200] mode=declenche_stop run=2/5
+[L=200] mode=declenche_stop run=3/5
+[L=200] mode=declenche_stop run=4/5
+[L=200] mode=declenche_stop run=5/5
+# TP3 piste B : sorties pilotees par la simulation
+
+Recepteurs : receivers_line.txt ; seuil 0.01 ; arret 0.3 s apres le dernier recepteur ; snapshots periodiques tous les 50 pas ; timemax 1.5 s ; 5 runs + 1 chauffe ; mediane [min ; max].
+
+| taille | mode | total (s) | calcul (s) | pas calcules / prevus | snapshots | volume ecrit (Mo) | ecriture snapshots (s) | copie GPU->hote (s) | tests (ms) |
+|---|---|---|---|---|---|---|---|---|---|
+| S | ref | 0.855 [0.847 ; 0.878] | 0.576 [0.573 ; 0.578] | 1499 / 1499 | 0 | 0.2 | 0.000 [0.000 ; 0.000] | 0.000 | 0.000 |
+| S | periodique | 18.185 [18.129 ; 18.755] | 0.751 [0.730 ; 0.765] | 1499 / 1499 | 30 | 716.5 | 17.100 [17.085 ; 17.721] | 0.917 | 0.000 |
+| S | declenche | 4.764 [4.757 ; 4.806] | 0.602 [0.599 ; 0.605] | 1499 / 1499 | 7 | 168.9 | 3.872 [3.869 ; 3.882] | 0.044 | 0.030 |
+| S | declenche_stop | 4.538 [4.536 ; 4.560] | 0.382 [0.381 ; 0.388] | 917 / 1499 | 7 | 168.8 | 3.878 [3.871 ; 3.882] | 0.044 | 0.040 |
+| M | ref | 6.818 [6.791 ; 6.834] | 6.384 [6.361 ; 6.392] | 1499 / 1499 | 0 | 0.2 | 0.000 [0.000 ; 0.000] | 0.000 | 0.000 |
+| M | periodique | 131.791 [131.723 ; 133.935] | 5.416 [5.403 ; 5.420] | 1499 / 1499 | 30 | 5405.7 | 125.956 [125.872 ; 128.073] | 0.506 | 0.000 |
+| M | declenche | 35.753 [35.732 ; 35.807] | 5.961 [5.958 ; 5.980] | 1499 / 1499 | 7 | 1185.2 | 29.353 [29.340 ; 29.400] | 0.122 | 0.031 |
+| M | declenche_stop | 33.213 [33.209 ; 33.233] | 3.462 [3.454 ; 3.471] | 918 / 1499 | 7 | 1185.1 | 29.340 [29.325 ; 29.353] | 0.121 | 0.042 |
+| L | ref | 52.357 [52.179 ; 52.520] | 51.169 [51.019 ; 51.342] | 1499 / 1499 | 0 | 0.2 | 0.000 [0.000 ; 0.000] | 0.000 | 0.000 |
+| L | periodique | 1060.433 [1056.868 ; 1062.824] | 49.175 [49.127 ; 49.245] | 1499 / 1499 | 30 | 41823.6 | 1009.988 [1006.473 ; 1012.485] | 3.961 | 0.000 |
+| L | declenche | 283.684 [283.372 ; 283.836] | 50.415 [50.394 ; 50.505] | 1499 / 1499 | 7 | 8732.0 | 232.023 [231.784 ; 232.242] | 0.964 | 0.033 |
+| L | declenche_stop | 263.738 [263.581 ; 264.484] | 30.528 [30.463 ; 30.651] | 918 / 1499 | 7 | 8732.0 | 232.060 [231.855 ; 232.759] | 0.948 | 0.045 |
+
+Figure : /home/benachour-souhila/Documents/m2/FUnTiDES-lite/bench_tp3/tp3_sorties_pilotees.png
