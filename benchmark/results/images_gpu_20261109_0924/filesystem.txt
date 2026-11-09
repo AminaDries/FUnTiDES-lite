@@ -1,0 +1,2 @@
+Sys. de fichiers                  Type blocs de 1K   Utilisé Disponible Uti% Monté sur
+/dev/mapper/ubuntu--vg-ubuntu--lv ext4   980211368 245682876  684662764  27% /
