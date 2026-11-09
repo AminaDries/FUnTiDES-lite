@@ -97,28 +97,6 @@ def main():
                 "Sous 0 = plus rapide que sans compression ; au-dessus = plus lent. Sans fsync.\n" + conditions,
                 os.path.join(a.out, "fig2_temps.png"))
 
-    quant = [med(t, "q8_rle_host", "snap_encode_s") / med(t, "q8_rle", "snap_encode_s") for t in TAILLES]
-    copie = [med(t, "q8_rle_host", "snapshot_copy_s") / med(t, "q8_rle", "snapshot_copy_s") for t in TAILLES]
-    fig, ax = plt.subplots(figsize=(9, 5.4))
-    largeur = 0.34
-    for j, (valeurs, couleur, nom) in enumerate(((quant, "#2a78d6", "Temps de quantification"),
-                                                  (copie, "#1baf7a", "Temps de copie GPU vers processeur"))):
-        for i, v in enumerate(valeurs):
-            x = i + (j - 0.5) * largeur
-            ax.bar(x, v, largeur * 0.88, color=couleur, label=nom if i == 0 else None)
-            ax.annotate(virgule("×%.1f" % v), (x, v), ha="center", va="bottom", fontsize=10,
-                        color=ENCRE, xytext=(0, 3), textcoords="offset points")
-    ax.axhline(1, color=ENCRE2, linewidth=1.2)
-    style(ax)
-    ax.set_ylabel("Temps sur le processeur ÷ temps sur le GPU")
-    ax.set_ylim(0, 12)
-    ax.legend(frameon=False, loc="upper left", fontsize=10)
-    valeurs_l = [virgule("%.2f" % med("L", m, c)) for c in ("snap_encode_s",) for m in ("q8_rle", "q8_rle_host")] + \
-                [virgule("%.2f" % med("L", m, c)) for c in ("snapshot_copy_s",) for m in ("q8_rle", "q8_rle_host")]
-    enregistrer(fig, "Quantifier sur le GPU est jusqu'à 10 fois plus rapide que sur le processeur",
-                "Ligne = 1 : aucun écart. En L : quantification %s s (GPU) contre %s s (processeur) ; copie %s s contre %s s.\n8 bits + RLE. %s"
-                % (tuple(valeurs_l) + (conditions,)),
-                os.path.join(a.out, "fig3_gpu_contre_processeur.png"))
 
 
 if __name__ == "__main__":
