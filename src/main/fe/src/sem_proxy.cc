@@ -9,6 +9,7 @@
 #include "insitu_gpu.h"
 #include "field_codec.h"
 #include "field_codec_gpu.h"
+#include "ppm_image.h"
 
 #include <cartesian_struct_builder.h>
 #include <cartesian_unstruct_builder.h>
@@ -84,6 +85,8 @@ SEMproxy::SEMproxy(const SemProxyOptions& opt)
   slice_pos_ = opt.slice_pos;
   slice_folder_ = opt.slice_folder;
   if (is_slices_) std::filesystem::create_directories(slice_folder_);
+  is_slice_image_ = opt.slice_image;
+  if (is_slice_image_) std::filesystem::create_directories(opt.image_folder);
 
   isElastic_ = opt.isElastic;
   cout << boolalpha;
@@ -480,6 +483,11 @@ void SEMproxy::run()
                               sliceExtractTime, sliceWriteTime, sliceFsyncTime);
       sliceCount++;
     }
+
+
+    // Image PPM de la slice (TP3, partie 1), memes pas que les slices
+    if (is_slice_image_ && indexTimeSample % snap_time_interval_ == 0)
+      image_bytes_ += saveSliceImage(indexTimeSample, solverData.m_pnGlobal);
 
     swap(i1, i2);
 
@@ -1143,6 +1151,231 @@ std::size_t SEMproxy::saveSlice(int timestep, const arrayReal& field,
   return bytes;
 }
 
+// ===========================================================================
+// Images PPM des slices (TP3, partie 1)
+// ===========================================================================
+
+// Indice de la valeur de 'sorted' la plus proche de x ('sorted' est trie).
+static int nearestIndex(const std::vector<float>& sorted, float x)
+{
+  auto it = std::lower_bound(sorted.begin(), sorted.end(), x);
+  if (it == sorted.begin()) return 0;
+  if (it == sorted.end()) return static_cast<int>(sorted.size()) - 1;
+  const int i = static_cast<int>(it - sorted.begin());
+  return (x - sorted[i - 1] <= sorted[i] - x) ? i - 1 : i;
+}
+
+// Construit UNE FOIS la table pixel -> noeud du plan de coupe.
+void SEMproxy::initSliceImage()
+{
+  // --- axe coupe et axes de l'image (horizontal a, vertical b) ---
+  int axis = 2;
+  if (slice_axis_ == "x") axis = 0;
+  if (slice_axis_ == "y") axis = 1;
+  const int a = (axis == 0) ? 1 : 0;
+  const int b = (axis == 2) ? 1 : 2;
+  const float tol = 1e-3f;  // 1 mm, comme saveSlice
+
+  // --- 1. noeuds du plan ---
+  std::vector<int> nodes;
+  std::vector<float> U, V;  // coordonnees dans le plan
+  const int nbNodes = m_mesh->getNumberOfNodes();
+  for (int n = 0; n < nbNodes; n++)
+  {
+    if (std::abs(m_mesh->nodeCoord(n, axis) - slice_pos_) <= tol)
+    {
+      nodes.push_back(n);
+      U.push_back(m_mesh->nodeCoord(n, a));
+      V.push_back(m_mesh->nodeCoord(n, b));
+    }
+  }
+  if (nodes.empty())
+  {
+    std::cerr << "---- Warning : no mesh node on the slice plane, images disabled."
+              << std::endl;
+    is_slice_image_ = false;
+    return;
+  }
+
+  // --- 2. colonnes (Us) et lignes (Vs) distinctes, triees ---
+  auto uniqueSorted = [tol](std::vector<float> v) {
+    std::sort(v.begin(), v.end());
+    std::vector<float> out;
+    for (float x : v)
+      if (out.empty() || x - out.back() > tol) out.push_back(x);
+    return out;
+  };
+  const std::vector<float> Us = uniqueSorted(U);
+  const std::vector<float> Vs = uniqueSorted(V);
+  img_w_ = static_cast<int>(Us.size());
+  img_h_ = static_cast<int>(Vs.size());
+
+  // --- 3. chaque noeud dans sa case : grid[colonne + ligne * largeur] ---
+  std::vector<int> grid(static_cast<std::size_t>(img_w_) * img_h_, -1);
+  for (std::size_t k = 0; k < nodes.size(); k++)
+    grid[nearestIndex(Us, U[k]) + nearestIndex(Vs, V[k]) * img_w_] = nodes[k];
+
+  // --- 4. pixels regulierement espaces -> noeud le plus proche ---
+  //        ligne 0 de l'image = haut = plus grande valeur verticale
+  pix2node_.assign(grid.size(), -1);
+  const float du = (img_w_ > 1) ? (Us.back() - Us.front()) / (img_w_ - 1) : 0.f;
+  const float dv = (img_h_ > 1) ? (Vs.back() - Vs.front()) / (img_h_ - 1) : 0.f;
+  for (int y = 0; y < img_h_; y++)
+  {
+    const int iv = nearestIndex(Vs, Vs.back() - y * dv);
+    for (int x = 0; x < img_w_; x++)
+    {
+      const int iu = nearestIndex(Us, Us.front() + x * du);
+      const int node = grid[iu + iv * img_w_];
+      if (node < 0) throw std::runtime_error("initSliceImage : grille incomplete");
+      pix2node_[x + static_cast<std::size_t>(y) * img_w_] = node;
+    }
+  }
+  std::cout << "---- Slice image : " << img_w_ << " x " << img_h_ << " pixels ("
+            << nodes.size() << " nodes on the plane)." << std::endl;
+}
+
+// Ecrit une image PPM de la slice (version CPU : le champ est lu par l'hote).
+std::size_t SEMproxy::saveSliceImage(int timestep, const arrayReal& field)
+{
+  // --- 0. premiere fois : construire la table pixel -> noeud ---
+  if (pix2node_.empty())
+  {
+    const auto t = std::chrono::steady_clock::now();
+    initSliceImage();
+#ifdef USE_KOKKOS
+    // mode device : copier la table sur le GPU et reserver la place de l'image
+    if (is_slice_image_ && opt_.image_mode == "device")
+    {
+      const int np = static_cast<int>(pix2node_.size());
+      pix2nodeD_ = Kokkos::View<int*>("pix2nodeD", np);
+      imgD_ = Kokkos::View<unsigned char*>("imgD", 3 * np);
+      Kokkos::View<const int*, Kokkos::HostSpace,
+                   Kokkos::MemoryTraits<Kokkos::Unmanaged>>
+          tableCPU(pix2node_.data(), np);
+      Kokkos::deep_copy(pix2nodeD_, tableCPU);
+    }
+#endif
+    image_init_s_ += std::chrono::duration<double>(
+                         std::chrono::steady_clock::now() - t).count();
+    if (!is_slice_image_) return 0;  // aucun noeud sur le plan
+  }
+
+  // --- 1. lecture du champ + max de |p| ---
+#ifdef USE_KOKKOS
+  Kokkos::fence();  // annexe 1 : le calcul du pas est fini
+#endif
+  const auto t0 = std::chrono::steady_clock::now();
+
+  const std::size_t np = pix2node_.size();
+  const bool onDevice = (opt_.image_mode == "device");
+  std::vector<float> vals;  // pressions lues par le CPU (mode host)
+  float localMax = 0.f;
+
+  if (!onDevice)
+  {
+    // CPU : le CPU lit les pressions du plan dans pnGlobal
+    vals.resize(np);
+    for (std::size_t k = 0; k < np; k++)
+    {
+      vals[k] = field(pix2node_[k], i1);
+      localMax = std::max(localMax, std::abs(vals[k]));
+    }
+  }
+  else
+  {
+#ifdef USE_KOKKOS
+    // GPU : chaque fil lit un pixel, on garde le plus grand |p|
+    const auto tab = pix2nodeD_;
+    const auto f = field;
+    const int col = i1;
+    Kokkos::parallel_reduce(
+        "imageMax", static_cast<int>(np),
+        KOKKOS_LAMBDA(const int k, float& m) {
+          const float p = f(tab(k), col);
+          const float a = (p < 0.f) ? -p : p;
+          if (a > m) m = a;
+        },
+        Kokkos::Max<float>(localMax));
+#else
+    throw std::runtime_error("--image-mode device needs a Kokkos build");
+#endif
+  }
+
+  // --- 2. borne : bornes symetriques [-bound, bound], 0 au centre ---
+  float bound = localMax;  // local
+  if (opt_.image_norm == "running")
+  {
+    img_running_max_ = std::max(img_running_max_, localMax);
+    bound = img_running_max_;
+  }
+  else if (opt_.image_norm == "fixed")
+    bound = opt_.image_bound;
+
+  // --- 3. couleurs ---
+  std::vector<ppm::RGB> pixels(np);
+  if (!onDevice)
+  {
+    for (std::size_t k = 0; k < np; k++)
+      pixels[k] = ppm::coolwarm(ppm::normalize_symmetric(vals[k], bound));
+  }
+#ifdef USE_KOKKOS
+  else
+  {
+    // GPU : 1 fil = 1 pixel, il ecrit ses 3 octets (R, G, B) dans imgD_
+    const auto tab = pix2nodeD_;
+    const auto img = imgD_;
+    const auto f = field;
+    const int col = i1;
+    const float b = bound;
+    Kokkos::parallel_for(
+        "imageColors", static_cast<int>(np), KOKKOS_LAMBDA(const int k) {
+          const ppm::RGB c =
+              ppm::coolwarm(ppm::normalize_symmetric(f(tab(k), col), b));
+          img(3 * k) = c.r;
+          img(3 * k + 1) = c.g;
+          img(3 * k + 2) = c.b;
+        });
+    Kokkos::fence();  // annexe 1 : couleurs vraiment finies
+  }
+#endif
+
+  const auto t1 = std::chrono::steady_clock::now();
+  image_extract_s_ += std::chrono::duration<double>(t1 - t0).count();
+
+  // --- 3 bis. transfert de l'image GPU -> CPU (mode device) ---
+#ifdef USE_KOKKOS
+  if (onDevice)
+  {
+    static_assert(sizeof(ppm::RGB) == 3, "RGB doit faire 3 octets");
+    Kokkos::View<unsigned char*, Kokkos::HostSpace,
+                 Kokkos::MemoryTraits<Kokkos::Unmanaged>>
+        imgCPU(reinterpret_cast<unsigned char*>(pixels.data()), 3 * np);
+    Kokkos::deep_copy(imgCPU, imgD_);
+    image_copy_s_ += std::chrono::duration<double>(
+                         std::chrono::steady_clock::now() - t1).count();
+  }
+#endif
+
+  // --- 4. ecriture ---
+  const auto tw = std::chrono::steady_clock::now();
+  std::ostringstream name;
+  name << opt_.image_folder << "/slice_" << std::setw(6) << std::setfill('0')
+       << timestep << ".ppm";
+  const std::size_t bytes = ppm::write_ppm(name.str(), pixels, img_w_, img_h_,
+                                           opt_.image_format == "p6");
+  const auto t2 = std::chrono::steady_clock::now();
+  image_write_s_ += std::chrono::duration<double>(t2 - tw).count();
+  
+  // --- 5. fsync ---
+  syncFile(name.str());
+  image_fsync_s_ += std::chrono::duration<double>(
+                        std::chrono::steady_clock::now() - t2).count();
+
+  image_count_++;
+  return bytes;
+}
+
 // Ajoute une ligne dans le fichier de métriques (crée l'en-tête si besoin)
 void SEMproxy::writeMetrics(double computeTime, double snapshotWriteTime,
                             int snapshotCount, std::size_t snapshotBytes,
@@ -1183,7 +1416,10 @@ void SEMproxy::writeMetrics(double computeTime, double snapshotWriteTime,
             "trigger_threshold,trigger_count,trigger_bytes,trigger_write_time_s,"
             "trigger_copy_s,trigger_sync_time_s,trigger_check_time_s,"
             "stop_after_receivers,stop_threshold,stop_reason,stop_step,"
-            "planned_steps,stop_check_time_s\n";
+            "planned_steps,stop_check_time_s,"
+            "slice_image,image_format,image_norm,image_width,image_height,"
+            "image_init_s,image_extract_s,image_write_s,image_fsync_s,"
+            "image_count,image_bytes,image_mode,image_copy_s\n";
   }
   file << std::setprecision(9) << opt_.ex << ',' << opt_.ey << ',' << opt_.ez
        << ',' << opt_.order << ',' << m_mesh->getNumberOfNodes() << ','
@@ -1210,7 +1446,13 @@ void SEMproxy::writeMetrics(double computeTime, double snapshotWriteTime,
        << ',' << trigger_sync_s_ << ',' << trigger_check_s_ << ','
        << opt_.stop_after_receivers << ',' << opt_.stop_threshold << ','
        << stop_reason_ << ',' << stop_step_ << ',' << planned_steps_ << ','
-       << stop_check_s_ << '\n';
+       << stop_check_s_ << ','
+       << (is_slice_image_ ? 1 : 0) << ',' << opt_.image_format << ','
+       << opt_.image_norm << ',' << img_w_ << ',' << img_h_ << ','
+       << image_init_s_ << ',' << image_extract_s_ << ',' << image_write_s_
+       << ',' << image_fsync_s_ << ',' << image_count_ << ',' << image_bytes_
+       << ',' << opt_.image_mode << ',' << image_copy_s_
+       << '\n';
 }
 
 // Initialize arrays
