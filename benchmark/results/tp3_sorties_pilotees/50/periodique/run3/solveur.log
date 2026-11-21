@@ -1,0 +1,54 @@
++==================================+
+| Initializing SEM Application ... |
++==================================+
+
+Receivers loaded: 7
+Allocate host memory for source and pressure values ...
+All source are currently are coded on middle element.
+Sample 0	: sourceTerm = 0.478306
+Sample 100	: sourceTerm = 164.67
+Sample 200	: sourceTerm = -493.48
+Sample 300	: sourceTerm = 164.67
+Sample 400	: sourceTerm = 0.478306
+Sample 500	: sourceTerm = 4.86051e-06
+Sample 600	: sourceTerm = 0
+Sample 700	: sourceTerm = 0
+Sample 800	: sourceTerm = 0
+Sample 900	: sourceTerm = 0
+Sample 1000	: sourceTerm = 0
+Sample 1100	: sourceTerm = 0
+Sample 1200	: sourceTerm = 0
+Sample 1300	: sourceTerm = 0
+Sample 1400	: sourceTerm = 0
+Element number for the source location: 63775
+
+Number of node is 1030301
+Number of element is 125000
+Launching the Method sem, the implementation makutu and the mesh is cartesian
+Model is on elements
+Physics type is acoustic
+Order of approximation will be 2
+Time step is 0.001s
+Simulated time is 1.5s
+
++================================= 
+| Running SEM Application ...      
++================================= 
+
+---- Seismo extract time : 0.029361 seconds (all steps).
+---- Seismo write time   : 0.00187735 seconds.
+---- Seismo fsync time   : 0.00369544 seconds.
+------------------------------------------------ 
+
+---- Elapsed Kernel Time : 0.751823 seconds.
+---- Elapsed Output Time : 17.1151 seconds.
+------------------------------------------------ 
+
++================================= 
+| SEM Application Finished.       
++================================= 
+
+Elapsed Initial Time : 0.173649 seconds.
+Elapsed Compute Time : 17.8733 seconds.
+Elapsed TotalExe Time : 18.0481 seconds.
+
